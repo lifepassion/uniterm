@@ -91,6 +91,10 @@ type ConnectionConfig struct {
 	RedisSentinels   string `json:"redisSentinels,omitempty"`   // comma-separated sentinel host:port list
 	SentinelUser     string `json:"sentinelUser,omitempty"`     // Sentinel ACL user (optional)
 	SentinelPassword string `json:"sentinelPassword,omitempty"` // Sentinel requirepass (optional)
+	// RedisKeySeparator splits keys into a folder tree in the Redis browser.
+	// Defaults to ":" when empty; set to a character that never appears in
+	// keys to disable grouping (flat list).
+	RedisKeySeparator string `json:"redisKeySeparator,omitempty"`
 	// SSH post-login script: commands to execute after successful login
 	PostLoginScript string `json:"postLoginScript,omitempty"`
 	// Post-login expect/send automation: interactive steps executed after login.

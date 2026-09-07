@@ -43,6 +43,8 @@
   "conn.redisMode": "Mode",
   "conn.redisModeStandalone": "Autonome",
   "conn.redisModeSentinel": "Sentinel",
+  "conn.redisKeySeparator": "Séparateur de clé",
+  "conn.redisKeySeparatorPlaceholder": "Par défaut « : » ; un caractère inutilisé (ex. |) désactive le groupement",
   "conn.redisSentinels": "Nœuds Sentinel",
   "conn.redisSentinelsPlaceholder": "hôte1:26379,hôte2:26379",
   "conn.redisMasterName": "Nom du maître",

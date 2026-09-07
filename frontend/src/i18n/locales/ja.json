@@ -43,6 +43,8 @@
   "conn.redisMode": "モード",
   "conn.redisModeStandalone": "スタンドアロン",
   "conn.redisModeSentinel": "センチネル",
+  "conn.redisKeySeparator": "キー区切り文字",
+  "conn.redisKeySeparatorPlaceholder": "既定は :。未使用の文字（例: |）でグループ化を無効化",
   "conn.redisSentinels": "Sentinel ノード",
   "conn.redisSentinelsPlaceholder": "host1:26379,host2:26379",
   "conn.redisMasterName": "マスター名",

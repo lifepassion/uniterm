@@ -43,6 +43,8 @@
   "conn.redisMode": "Mode",
   "conn.redisModeStandalone": "Standalone",
   "conn.redisModeSentinel": "Sentinel",
+  "conn.redisKeySeparator": "Key Separator",
+  "conn.redisKeySeparatorPlaceholder": "Default ':'; set an unused char (e.g. |) to disable grouping",
   "conn.redisSentinels": "Sentinel Nodes",
   "conn.redisSentinelsPlaceholder": "host1:26379, host2:26379",
   "conn.redisMasterName": "Master Name",

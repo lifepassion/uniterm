@@ -13,19 +13,33 @@
           <button class="btn btn-ghost btn-icon btn-sm" :title="t('redis.newKey')" @click="onShowNewKeyDialog" style="flex-shrink: 0"><Plus :size="14" /></button>
         </div>
 
-        <!-- Key list -->
+        <!-- Key tree -->
         <div class="redis-key-list" v-loading="loading">
           <div v-if="keys.length === 0 && !loading" class="redis-placeholder">{{ t('redis.noKeys') }}</div>
-          <div
-            v-for="keyInfo in keys"
-            :key="keyInfo.name"
-            class="key-item"
-            :class="{ selected: selectedKey === keyInfo.name }"
-            @click="onSelectKey(keyInfo)"
-          >
-            <span class="key-type-badge">{{ keyInfo.type }}</span>
-            <span class="key-name">{{ keyInfo.name }}</span>
-          </div>
+          <template v-else>
+            <!-- flat mode: separator empty -->
+            <template v-if="!showTree">
+              <div
+                v-for="keyInfo in keys"
+                :key="keyInfo.name"
+                class="key-item"
+                :class="{ selected: selectedKey === keyInfo.name }"
+                @click="onSelectKey(keyInfo)"
+              >
+                <span class="key-type-badge">{{ keyInfo.type }}</span>
+                <span class="key-name">{{ keyInfo.name }}</span>
+              </div>
+            </template>
+            <!-- tree mode: keys grouped by separator -->
+            <template v-else>
+              <TreeNode
+                v-for="node in keyTree"
+                :key="node.id"
+                :node="node"
+                :depth="0"
+              />
+            </template>
+          </template>
         </div>
 
         <!-- Pagination -->
@@ -266,10 +280,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onUnmounted } from 'vue'
+import { ref, watch, computed, onUnmounted, h, defineComponent, type PropType } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { msg } from '../services/message'
-import { Trash2, Plus, GripVertical, RefreshCw, ChevronLeft, ChevronRight } from '@lucide/vue'
+import { Trash2, Plus, GripVertical, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Folder } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import {
   RedisScanKeys,
@@ -295,8 +309,137 @@ import {
 } from '../../bindings/github.com/ys-ll/uniterm/app'
 import type { RedisKeyInfo, FieldEntry, ScoredMember, ScanResult } from '../types/redis'
 
-const props = defineProps<{ sessionId: string }>()
+const props = defineProps<{ sessionId: string; keySeparator?: string }>()
 const { t } = useI18n()
+
+// Separator for tree grouping; empty disables the tree (flat list).
+const separator = computed(() => (props.keySeparator ?? '').length === 1 ? props.keySeparator! : ':')
+const showTree = computed(() => !!props.keySeparator && props.keySeparator.length === 1)
+
+// ── Key tree building ──
+// Nodes are built from the currently scanned page of keys by splitting names
+// on the separator. Folder counts are recursive sums over loaded keys only —
+// the same approximation every Redis GUI makes.
+
+interface KeyNode {
+  id: string          // full path from root, e.g. "app:cache"
+  label: string       // last segment
+  count: number       // leaf keys under this node (recursive)
+  children: KeyNode[] // empty array = leaf key
+  keyName?: string    // leaf only: full redis key
+  keyType?: RedisKeyInfo['type']  // leaf only
+}
+
+function buildKeyTree(keys: RedisKeyInfo[], sep: string): KeyNode[] {
+  interface RawNode { children: Map<string, RawNode>; key?: RedisKeyInfo }
+  const root: RawNode = { children: new Map(), key: undefined }
+
+  for (const info of keys) {
+    const parts = info.name.split(sep)
+    let cur = root
+    for (let i = 0; i < parts.length; i++) {
+      if (i === parts.length - 1) {
+        // Leaf slot keyed by the last segment (unique within its folder); the
+        // marker prefix keeps it distinct from a same-named folder slot —
+        // keys "app" and "app:cache" really do coexist in Redis.
+        cur.children.set('\x00' + parts[i], { children: new Map(), key: info })
+      } else {
+        let next = cur.children.get(parts[i])
+        if (!next) {
+          next = { children: new Map(), key: undefined }
+          cur.children.set(parts[i], next)
+        }
+        cur = next
+      }
+    }
+  }
+
+  // Convert nested maps to display nodes.
+  const toNodes = (raw: RawNode, path: string): KeyNode[] => {
+    const nodes: KeyNode[] = []
+    for (const [seg, child] of raw.children) {
+      if (seg.startsWith('\x00')) {
+        const info = child.key!
+        nodes.push({ id: info.name, label: seg.slice(1), count: 1, children: [], keyName: info.name, keyType: info.type })
+        continue
+      }
+      const childPath = path ? path + sep + seg : seg
+      const grandchildren = toNodes(child, childPath)
+      nodes.push({
+        id: childPath,
+        label: seg,
+        count: grandchildren.reduce((a, n) => a + n.count, 0),
+        children: grandchildren,
+      })
+    }
+    return nodes.sort((a, b) => {
+      // folders before keys, then alphabetical — same rule as the other GUIs
+      if (a.children.length !== b.children.length) return a.children.length ? -1 : 1
+      return a.label.localeCompare(b.label)
+    })
+  }
+  return toNodes(root, '')
+}
+
+const keyTree = computed(() => separator.value ? buildKeyTree(keys.value, separator.value) : [])
+const expandedFolders = ref(new Set<string>())
+
+function onToggleFolder(id: string) {
+  const next = new Set(expandedFolders.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  expandedFolders.value = next
+}
+
+function onSelectTreeKey(node: KeyNode) {
+  if (node.keyName) {
+    onSelectKey({ name: node.keyName, type: node.keyType || 'string', ttl: -1 } as RedisKeyInfo)
+  }
+}
+
+// Recursive tree node rendered inline (script-setup local component).
+const TreeRow = defineComponent({
+  name: 'RedisTreeRow',
+  props: { node: { type: Object as PropType<KeyNode>, required: true }, depth: { type: Number, required: true } },
+  setup(rowProps) {
+    return () => {
+      const n = rowProps.node
+      const indent = 10 + rowProps.depth * 14
+      if (n.children.length === 0) {
+        return h('div', {
+          class: ['key-item', { selected: selectedKey.value === n.keyName }],
+          style: { paddingLeft: indent + 'px' },
+          onClick: () => onSelectTreeKey(n),
+        }, [
+          h('span', { class: 'tree-arrow' }),
+          h('span', { class: 'key-type-badge' }, n.keyType),
+          h('span', { class: 'key-name' }, n.label),
+        ])
+      }
+      const expanded = expandedFolders.value.has(n.id)
+      const rows = [
+        h('div', {
+          class: 'key-item folder',
+          style: { paddingLeft: indent + 'px' },
+          onClick: () => onToggleFolder(n.id),
+        }, [
+          h('span', { class: 'tree-arrow', onClick: (e: MouseEvent) => { e.stopPropagation(); onToggleFolder(n.id) } },
+            [h(expanded ? ChevronDown : ChevronRight, { size: 12 })]),
+          h(Folder, { class: 'tree-icon', size: 14 }),
+          h('span', { class: 'key-name' }, n.label),
+          h('span', { class: 'folder-count' }, String(n.count)),
+        ]),
+      ]
+      if (expanded) {
+        for (const child of n.children) {
+          rows.push(h(TreeRow, { node: child, depth: rowProps.depth + 1, key: child.id }))
+        }
+      }
+      return rows
+    }
+  },
+})
+const TreeNode = TreeRow
 
 // --- Resize ---
 const leftWidth = ref(280)
@@ -393,6 +536,7 @@ async function doScan(cursor: number) {
     keys.value = (result.keys || []).sort((a, b) => a.name.localeCompare(b.name))
     nextCursor.value = result.cursor
     hasMore.value = result.cursor !== 0
+    if (cursor === 0) expandedFolders.value = new Set()
   } catch (e: any) {
     msg.error(`Scan failed: ${e?.message || e}`)
     keys.value = []
@@ -697,6 +841,30 @@ watch(() => props.sessionId, async (newId) => {
   text-overflow: ellipsis;
   white-space: nowrap;
   user-select: none;
+}
+.key-item.folder {
+  font-weight: 600;
+}
+.key-item.folder:hover { background: var(--bg-hover); }
+.tree-arrow {
+  width: 12px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tree-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+.folder-count {
+  margin-left: auto;
+  padding-right: 4px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  flex-shrink: 0;
 }
 .redis-pagination {
   display: flex;

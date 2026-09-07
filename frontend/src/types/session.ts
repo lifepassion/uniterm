@@ -66,6 +66,10 @@ export interface ConnectionConfig {
   redisSentinels?: string   // comma-separated sentinel host:port list
   sentinelUser?: string     // Sentinel ACL user (optional)
   sentinelPassword?: string // Sentinel requirepass (optional)
+  // Separator splitting keys into a folder tree in the Redis browser.
+  // Defaults to ':' when empty; set to a character that never appears in
+  // keys to disable grouping (flat list).
+  redisKeySeparator?: string
   postLoginScript?: string
   postLoginExpectSteps?: PostLoginExpectStep[]
   // SSH tunnel: reference to an existing SSH connection used as a jump host

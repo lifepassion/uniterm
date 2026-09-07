@@ -43,6 +43,8 @@
   "conn.redisMode": "Режим",
   "conn.redisModeStandalone": "Автономный",
   "conn.redisModeSentinel": "Sentinel",
+  "conn.redisKeySeparator": "Разделитель ключей",
+  "conn.redisKeySeparatorPlaceholder": "По умолчанию ':'; неиспользуемый символ (напр. |) отключает группировку",
   "conn.redisSentinels": "Узлы Sentinel",
   "conn.redisSentinelsPlaceholder": "хост1:26379,хост2:26379",
   "conn.redisMasterName": "Имя мастера",
