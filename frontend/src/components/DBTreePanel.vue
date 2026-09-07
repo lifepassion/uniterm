@@ -176,9 +176,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, nextTick } from 'vue'
+import { ref, watch, computed, nextTick, h } from 'vue'
 import { Database, Table2, Eye, ChevronRight, ChevronDown, RefreshCw, MoreHorizontal } from '@lucide/vue'
 import { useI18n } from '../i18n'
+import { ElMessageBox } from 'element-plus'
 import { GetDatabases, GetTables, CreateDatabase, DropDatabase, CreateTable, DropTable, DropView, TruncateTable, CopyTable, GetDBCapabilities, DumpTable, SaveFileDialogFiltered, WriteFileBase64, OpenFileDialogFiltered, ReadFileBase64, ExecuteSQLScript } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
 import Menu from './Menu.vue'
@@ -518,16 +519,34 @@ async function onCtxRunSqlFile() {
     const text = decodeBase64(b64)
     const result = await ExecuteSQLScript(props.sessionId, dbName, text)
     if (result?.failedLine) {
-      msg.error(t('db.scriptFailedLine', { line: result.failedLine }))
+      showScriptFailure(result)
     } else {
       const name = path.split(/[\\/]/).pop() || path
-      msg.success(t('db.scriptExecuted', { n: result?.executed ?? 0 }) + ` · ${name}`)
+      msg.success(t('db.scriptExecuted', { n: result?.executed ?? 0 }) + ` · ${t('db.affectedRows')}: ${result?.affectedTotal ?? 0} · ${name}`)
     }
   } catch (e: any) {
     msg.error(e?.message || String(e))
   } finally {
     runningSqlFile.value = false
   }
+}
+
+// Failure detail dialog: line number alone doesn't tell the user what went
+// wrong (e.g. a duplicate-key INSERT on a rerun). Show the driver error and
+// the failing statement, matching the query editor's script error panel.
+function showScriptFailure(result: { failedLine: number; failedSql?: string; error?: string }) {
+  const children = [h('p', { style: 'margin:0;font-weight:600' }, t('db.scriptFailedLine', { line: result.failedLine }))]
+  if (result.error) {
+    children.push(h('p', { style: 'margin:6px 0 0;color:var(--el-color-error);word-break:break-word;font-family:var(--font-mono,monospace);font-size:12px' }, result.error))
+  }
+  if (result.failedSql) {
+    children.push(h('pre', { style: 'margin:8px 0 0;padding:8px;background:var(--bg-base,#f5f5f5);border-radius:4px;font-family:var(--font-mono,monospace);font-size:12px;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow:auto' }, result.failedSql))
+  }
+  ElMessageBox.alert(h('div', { style: 'display:flex;flex-direction:column' }, children), t('db.runSqlFile'), {
+    confirmButtonText: t('common.confirm'),
+    type: 'error',
+    customStyle: { maxWidth: '560px', width: '560px' },
+  }).catch(() => {})
 }
 
 // ── Copy table ──
