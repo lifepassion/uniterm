@@ -17,28 +17,12 @@
         <div class="redis-key-list" v-loading="loading">
           <div v-if="keys.length === 0 && !loading" class="redis-placeholder">{{ t('redis.noKeys') }}</div>
           <template v-else>
-            <!-- flat mode: separator empty -->
-            <template v-if="!showTree">
-              <div
-                v-for="keyInfo in keys"
-                :key="keyInfo.name"
-                class="key-item"
-                :class="{ selected: selectedKey === keyInfo.name }"
-                @click="onSelectKey(keyInfo)"
-              >
-                <span class="key-type-badge">{{ keyInfo.type }}</span>
-                <span class="key-name">{{ keyInfo.name }}</span>
-              </div>
-            </template>
-            <!-- tree mode: keys grouped by separator -->
-            <template v-else>
-              <TreeNode
-                v-for="node in keyTree"
-                :key="node.id"
-                :node="node"
-                :depth="0"
-              />
-            </template>
+            <TreeNode
+              v-for="node in keyTree"
+              :key="node.id"
+              :node="node"
+              :depth="0"
+            />
           </template>
         </div>
 
@@ -312,9 +296,12 @@ import type { RedisKeyInfo, FieldEntry, ScoredMember, ScanResult } from '../type
 const props = defineProps<{ sessionId: string; keySeparator?: string }>()
 const { t } = useI18n()
 
-// Separator for tree grouping; empty disables the tree (flat list).
+// Separator for tree grouping; defaults to ":" when empty — the namespace
+// convention shared by every Redis GUI. The tree is always on because the
+// separator is never empty; to get a flat list back, set a character that
+// never appears in any key (same UX as ARDM's "empty disables tree" in
+// reverse — the placeholder explains this).
 const separator = computed(() => (props.keySeparator ?? '').length === 1 ? props.keySeparator! : ':')
-const showTree = computed(() => !!props.keySeparator && props.keySeparator.length === 1)
 
 // ── Key tree building ──
 // Nodes are built from the currently scanned page of keys by splitting names
