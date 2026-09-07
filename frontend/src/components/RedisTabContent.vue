@@ -9,20 +9,37 @@
             <el-option v-for="n in 16" :key="n-1" :label="`${n-1} (${dbSizes[n-1] ?? '?'})`" :value="n-1" />
           </el-select>
           <el-input v-model="scanPattern" size="small" placeholder="*" style="flex: 1; min-width: 80px" @keyup.enter="onScan" />
-          <button class="btn btn-ghost btn-icon btn-sm" title="Refresh" @click="onScan" style="flex-shrink: 0"><RefreshCw :size="14" /></button>
+          <button class="btn btn-ghost btn-icon btn-sm" :title="t('redis.refresh')" @click="onScan" style="flex-shrink: 0"><RefreshCw :size="14" /></button>
+          <button class="btn btn-ghost btn-icon btn-sm" :title="treeMode ? t('redis.flatView') : t('redis.treeView')" @click="treeMode = !treeMode" style="flex-shrink: 0">
+            <Folder :size="14" v-if="!treeMode" />
+            <List :size="14" v-else />
+          </button>
           <button class="btn btn-ghost btn-icon btn-sm" :title="t('redis.newKey')" @click="onShowNewKeyDialog" style="flex-shrink: 0"><Plus :size="14" /></button>
         </div>
 
-        <!-- Key tree -->
+        <!-- Key tree / flat list -->
         <div class="redis-key-list" v-loading="loading">
           <div v-if="keys.length === 0 && !loading" class="redis-placeholder">{{ t('redis.noKeys') }}</div>
-          <template v-else>
+          <template v-else-if="treeMode">
             <TreeNode
               v-for="node in keyTree"
               :key="node.id"
               :node="node"
               :depth="0"
             />
+          </template>
+          <template v-else>
+            <div
+              v-for="keyInfo in keys"
+              :key="keyInfo.name"
+              class="key-item"
+              :class="{ selected: selectedKey === keyInfo.name }"
+              @click="onSelectKey(keyInfo)"
+            >
+              <span class="table-icon-spacer" />
+              <span class="key-type-badge">{{ keyInfo.type }}</span>
+              <span class="key-name">{{ keyInfo.name }}</span>
+            </div>
           </template>
         </div>
 
@@ -267,7 +284,7 @@
 import { ref, watch, computed, onUnmounted, h, defineComponent, type PropType } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { msg } from '../services/message'
-import { Trash2, Plus, GripVertical, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Folder } from '@lucide/vue'
+import { Trash2, Plus, GripVertical, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Folder, List } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import {
   RedisScanKeys,
@@ -297,11 +314,12 @@ const props = defineProps<{ sessionId: string; keySeparator?: string }>()
 const { t } = useI18n()
 
 // Separator for tree grouping; defaults to ":" when empty — the namespace
-// convention shared by every Redis GUI. The tree is always on because the
-// separator is never empty; to get a flat list back, set a character that
-// never appears in any key (same UX as ARDM's "empty disables tree" in
-// reverse — the placeholder explains this).
+// convention shared by every Redis GUI. Grouping only ever reflects the
+// currently scanned page (SCAN is random-order), so folder counts are lower
+// bounds; the folder badge renders as "N+" to say so.
 const separator = computed(() => (props.keySeparator ?? '').length === 1 ? props.keySeparator! : ':')
+const treeMode = ref(true)
+const keyTree = computed(() => treeMode.value ? buildKeyTree(keys.value, separator.value) : [])
 
 // ── Key tree building ──
 // Nodes are built from the currently scanned page of keys by splitting names
@@ -368,7 +386,6 @@ function buildKeyTree(keys: RedisKeyInfo[], sep: string): KeyNode[] {
   return toNodes(root, '')
 }
 
-const keyTree = computed(() => separator.value ? buildKeyTree(keys.value, separator.value) : [])
 const expandedFolders = ref(new Set<string>())
 
 function onToggleFolder(id: string) {
@@ -385,41 +402,46 @@ function onSelectTreeKey(node: KeyNode) {
 }
 
 // Recursive tree node rendered inline (script-setup local component).
+// Classes mirror DBTreePanel: folders use the db-header look (13px semibold,
+// chevron arrow), leaves the table-item look (13px, icon spacer keeps text
+// aligned with the folder label).
 const TreeRow = defineComponent({
   name: 'RedisTreeRow',
   props: { node: { type: Object as PropType<KeyNode>, required: true }, depth: { type: Number, required: true } },
   setup(rowProps) {
     return () => {
       const n = rowProps.node
-      const indent = 10 + rowProps.depth * 14
       if (n.children.length === 0) {
         return h('div', {
-          class: ['key-item', { selected: selectedKey.value === n.keyName }],
-          style: { paddingLeft: indent + 'px' },
+          class: ['table-item', { selected: selectedKey.value === n.keyName }],
           onClick: () => onSelectTreeKey(n),
         }, [
-          h('span', { class: 'tree-arrow' }),
+          h('span', { class: 'table-icon-spacer' }),
           h('span', { class: 'key-type-badge' }, n.keyType),
-          h('span', { class: 'key-name' }, n.label),
+          h('span', { class: 'table-name' }, n.label),
         ])
       }
       const expanded = expandedFolders.value.has(n.id)
       const rows = [
         h('div', {
-          class: 'key-item folder',
-          style: { paddingLeft: indent + 'px' },
+          class: 'db-header',
+          title: t('redis.folderCountHint', { n: n.count }),
           onClick: () => onToggleFolder(n.id),
         }, [
-          h('span', { class: 'tree-arrow', onClick: (e: MouseEvent) => { e.stopPropagation(); onToggleFolder(n.id) } },
+          h('span', { class: 'db-arrow', onClick: (e: MouseEvent) => { e.stopPropagation(); onToggleFolder(n.id) } },
             [h(expanded ? ChevronDown : ChevronRight, { size: 12 })]),
-          h(Folder, { class: 'tree-icon', size: 14 }),
-          h('span', { class: 'key-name' }, n.label),
-          h('span', { class: 'folder-count' }, String(n.count)),
+          h(Folder, { class: 'db-icon', size: 14 }),
+          h('span', { class: 'db-name' }, n.label),
+          h('span', { class: 'folder-count' }, n.count + '+'),
         ]),
       ]
       if (expanded) {
         for (const child of n.children) {
-          rows.push(h(TreeRow, { node: child, depth: rowProps.depth + 1, key: child.id }))
+          // Each level indents by the folder's own icon column width, the
+          // same visual rhythm as DBTreePanel's arrow + icon column.
+          rows.push(h('div', { class: 'tree-children' }, [
+            h(TreeRow, { node: child, depth: rowProps.depth + 1, key: child.id }),
+          ]))
         }
       }
       return rows
@@ -799,13 +821,13 @@ watch(() => props.sessionId, async (newId) => {
   overflow-y: auto;
 }
 .key-item {
-  padding: 6px 10px;
+  padding: 6px 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-primary);
   transition: background 0.12s ease;
   user-select: none;
@@ -829,25 +851,14 @@ watch(() => props.sessionId, async (newId) => {
   white-space: nowrap;
   user-select: none;
 }
-.key-item.folder {
-  font-weight: 600;
-}
-.key-item.folder:hover { background: var(--bg-hover); }
-.tree-arrow {
-  width: 12px;
-  flex-shrink: 0;
-  color: var(--text-muted);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.tree-icon {
-  flex-shrink: 0;
-  color: var(--text-muted);
+/* tree rows reuse DBTreePanel classes (db-header/db-arrow/db-name/table-item/
+   table-name); only the count badge and nesting indent are local. */
+.tree-children {
+  padding-left: 18px;
 }
 .folder-count {
   margin-left: auto;
-  padding-right: 4px;
+  font-family: var(--font-ui);
   font-size: 11px;
   font-weight: 400;
   color: var(--text-muted);
