@@ -110,6 +110,10 @@ type ConnectionConfig struct {
 	TunnelSSHPassword string      `json:"tunnelSSHPassword,omitempty"`
 	// SFTP max concurrent transfers (0 = unlimited)
 	SftpMaxConcurrency int `json:"sftpMaxConcurrency,omitempty"`
+	// FileTransferProto selects the file-transfer protocol used by the SSH
+	// connection's companion file panel and "connect SFTP/SCP" actions:
+	// "" / "sftp" (default) | "scp" — for hosts without an SFTP subsystem.
+	FileTransferProto string `json:"fileTransferProto,omitempty"`
 	// Initial terminal size reported by the frontend BEFORE the
 	// SSH/local PTY is created. Without this the backend starts the
 	// remote shell with the default 80x24 and Claude Code draws tables

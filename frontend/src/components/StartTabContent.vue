@@ -97,7 +97,9 @@
                 <el-icon v-else-if="config.type === 'local'"><Laptop :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'serial'"><Cable :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'tcp'"><ArrowLeftRight :size="28" /></el-icon>
-                <el-icon v-else-if="config.type === 'ftp' || config.type === 'sftp'"><FolderUp :size="28" /></el-icon>
+                <el-icon v-else-if="config.type === 'sftp'"><Folders :size="28" /></el-icon>
+                <el-icon v-else-if="config.type === 'scp'"><FileUp :size="28" /></el-icon>
+                <el-icon v-else-if="config.type === 'ftp'"><FolderUp :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'smb'"><HardDrive :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 's3'"><Cloud :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'webdav'"><Globe :size="28" /></el-icon>
@@ -186,7 +188,9 @@
                 <el-icon v-else-if="config.type === 'local'"><Laptop :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'serial'"><Cable :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'tcp'"><ArrowLeftRight :size="28" /></el-icon>
-                <el-icon v-else-if="config.type === 'ftp' || config.type === 'sftp'"><FolderUp :size="28" /></el-icon>
+                <el-icon v-else-if="config.type === 'sftp'"><Folders :size="28" /></el-icon>
+                <el-icon v-else-if="config.type === 'scp'"><FileUp :size="28" /></el-icon>
+                <el-icon v-else-if="config.type === 'ftp'"><FolderUp :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'smb'"><HardDrive :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 's3'"><Cloud :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'webdav'"><Globe :size="28" /></el-icon>
@@ -262,7 +266,9 @@
               <el-icon v-else-if="config.type === 'local'"><Laptop :size="28" /></el-icon>
               <el-icon v-else-if="config.type === 'serial'"><Cable :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'tcp'"><ArrowLeftRight :size="28" /></el-icon>
-              <el-icon v-else-if="config.type === 'ftp' || config.type === 'sftp'"><FolderUp :size="28" /></el-icon>
+              <el-icon v-else-if="config.type === 'sftp'"><Folders :size="28" /></el-icon>
+              <el-icon v-else-if="config.type === 'scp'"><FileUp :size="28" /></el-icon>
+              <el-icon v-else-if="config.type === 'ftp'"><FolderUp :size="28" /></el-icon>
               <el-icon v-else-if="config.type === 'smb'"><HardDrive :size="28" /></el-icon>
               <el-icon v-else-if="config.type === 's3'"><Cloud :size="28" /></el-icon>
               <el-icon v-else-if="config.type === 'webdav'"><Globe :size="28" /></el-icon>
@@ -326,7 +332,7 @@
       <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'serial'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectSerial(contextMenuConfig, $event)">{{ t('sidebar.connectSerial') }}</MenuItem>
       <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'tcp'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnect(contextMenuConfig, $event)">{{ t('sidebar.connectTcp') }}</MenuItem>
       <!-- File Transfer -->
-      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'ssh'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectSftp(contextMenuConfig)">{{ t('sidebar.connectSftp') }}</MenuItem>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'ssh'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectSftp(contextMenuConfig)">{{ t(connectFileMenuKey(contextMenuConfig)) }}</MenuItem>
       <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'ftp'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectFtp(contextMenuConfig)">{{ t('sidebar.connectFtp') }}</MenuItem>
       <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'smb'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectSmb(contextMenuConfig)">{{ t('sidebar.connectSmb') }}</MenuItem>
       <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 's3'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectS3(contextMenuConfig)">{{ t('sidebar.connectS3') }}</MenuItem>
@@ -431,11 +437,12 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useI18n } from '../i18n'
 import { GetRecentConnections } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { formatConnSubtitle, getConnectionTypeKey, getTypeCategory, formatTypeFilterLabel, getTypeFilterCatalog, isWindows } from '../utils/quickConnect'
+import { connectFileMenuKey } from '../utils/fileTransferUtils'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
 import MenuSubmenu from './MenuSubmenu.vue'
 import MenuDivider from './MenuDivider.vue'
-import { Filter, Plus, Laptop, Cable, SquareTerminal, Terminal, Database, DatabaseZap, Layers, DatabaseSearch, Monitor, MonitorSmartphone, MonitorCloud, FolderUp, HardDrive, Cloud, Globe, Server, Folder, FolderOpen, Zap, MoreHorizontal, ChevronDown, ShipWheel, Boxes, AppWindow, ArrowLeftRight } from '@lucide/vue'
+import { Filter, Plus, Laptop, Cable, SquareTerminal, Terminal, Database, DatabaseZap, Layers, DatabaseSearch, Monitor, MonitorSmartphone, MonitorCloud, FolderUp, Folders, FileUp, HardDrive, Cloud, Globe, Server, Folder, FolderOpen, Zap, MoreHorizontal, ChevronDown, ShipWheel, Boxes, AppWindow, ArrowLeftRight } from '@lucide/vue'
 
 const props = defineProps<{
   tab: StartTab

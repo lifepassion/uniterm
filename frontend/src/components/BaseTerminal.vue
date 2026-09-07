@@ -83,7 +83,7 @@
 
       <!-- ③ SSH 连接功能 -->
       <MenuDivider />
-      <MenuItem v-if="isSsh" @click="openSftp">{{ t('sidebar.connectSftp') }}</MenuItem>
+      <MenuItem v-if="isSsh" @click="openSftp">{{ t(connectFileMenuKey(panel?.config)) }}</MenuItem>
       <MenuItem v-if="isSsh" @click="uploadFileRz">{{ t('terminal.uploadFileRz') }}</MenuItem>
       <MenuItem v-if="isSsh" @click="openMonitor">{{ t('sidebar.connectMonitor') }}</MenuItem>
     </Menu>
@@ -126,6 +126,7 @@ import '@xterm/xterm/css/xterm.css'
 import { SessionWrite, SessionResize, SessionEndZmodem } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { WriteFileBase64, SaveFileDialog, FrontendLog, EnableSessionOutputLog, DisableSessionOutputLog, GetSessionOutputLogInfo, OpenPathInExplorer } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useNativeFileDrop } from '../composables/useFilePanel'
+import { connectFileMenuKey } from '../utils/fileTransferUtils'
 import { msg } from '../services/message'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useLocalStateStore } from '../stores/localStateStore'

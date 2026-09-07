@@ -9,6 +9,7 @@ import { usePanelStore } from '../stores/panelStore'
 import { useTabStore } from '../stores/tabStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { waitForTerminalSize } from '../services/terminalManager'
+import { fileTransferProto } from '../utils/fileTransferUtils'
 import type { ConnectionConfig } from '../types/session'
 
 // The session-type argument to CreateSession isn't always tab.config.type:
@@ -23,7 +24,8 @@ function resolveSessionType(tabType: string, config: any): string {
     return 'database'
   }
   if (tabType === 'sftp') {
-    return config?.type === 'ssh' ? 'sftp' : config?.type
+    if (config?.type === 'ssh') return fileTransferProto(config)
+    return config?.type
   }
   return config?.type
 }

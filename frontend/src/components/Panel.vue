@@ -77,7 +77,7 @@
 
             <!-- ③ 连接功能（ssh） -->
             <MenuDivider />
-            <MenuItem v-if="panel.type === 'ssh'" @click="connectSftp(); moreMenuVisible = false">{{ t('sidebar.connectSftp') }}</MenuItem>
+            <MenuItem v-if="panel.type === 'ssh'" @click="connectSftp(); moreMenuVisible = false">{{ t(connectFileMenuKey(panel.config)) }}</MenuItem>
             <MenuItem v-if="panel.type === 'ssh'" @click="uploadFileRz(); moreMenuVisible = false">{{ t('terminal.uploadFileRz') }}</MenuItem>
             <MenuItem v-if="panel.type === 'ssh'" @click="connectMonitor(); moreMenuVisible = false">{{ t('sidebar.connectMonitor') }}</MenuItem>
           </Menu>
@@ -125,6 +125,7 @@ import { msg } from '../services/message'
 import { useI18n } from '../i18n'
 import type { Panel } from '../types/workspace'
 import { waitForTerminalSize } from '../services/terminalManager'
+import { connectFileMenuKey } from '../utils/fileTransferUtils'
 import type { ConnectionConfig } from '../types/session'
 import type { CredentialResult } from './CredentialPrompt.vue'
 
@@ -402,7 +403,7 @@ async function retryConnection() {
   }
 
   // On first retry, try with existing credentials; on subsequent retries, re-prompt
-  const credTypes = ['ssh', 'mosh', 'sftp', 'ftp', 'telnet']
+  const credTypes = ['ssh', 'mosh', 'sftp', 'scp', 'ftp', 'telnet']
   if (credTypes.includes(props.panel.type) && props.panel.config.authType !== 'key' && props.panel.config.authType !== 'keyText' && retryAttempt > 1) {
     const result = await showCredentialDialog(
       t('credential.title'),

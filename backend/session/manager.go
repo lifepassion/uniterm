@@ -31,6 +31,8 @@ func (sm *SessionManager) Create(sessionType string, config ConnectionConfig) (S
 		s = NewSSHSession(config.ID)
 	case "sftp":
 		s = NewSFTPSession(config.ID)
+	case "scp":
+		s = NewSCPSession(config.ID)
 	case "rdp":
 		s = NewRDPSession(config.ID)
 

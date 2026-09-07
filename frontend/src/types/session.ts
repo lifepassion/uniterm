@@ -17,7 +17,7 @@ export interface ConnectionConfig {
   id: string
   name: string
   remark?: string
-  type: 'ssh' | 'telnet' | 'mosh' | 'rdp' | 'vnc' | 'spice' | 'database' | 'local' | 'sftp' | 'monitor' | 'ftp' | 'serial' | 'smb' | 'webdav' | 's3' | 'tcp' | 'k8s' | 'container' | 'x11-desktop'
+  type: 'ssh' | 'telnet' | 'mosh' | 'rdp' | 'vnc' | 'spice' | 'database' | 'local' | 'sftp' | 'scp' | 'monitor' | 'ftp' | 'serial' | 'smb' | 'webdav' | 's3' | 'tcp' | 'k8s' | 'container' | 'x11-desktop'
   host: string
   port: number
   user: string
@@ -27,6 +27,10 @@ export interface ConnectionConfig {
   keyContent?: string // inline private-key text (authType === 'keyText')
   identityId?: string // reference to a vault identity (authType === 'identity')
   proxyId?: string // reference to a saved outbound proxy (SOCKS5/HTTP)
+  // File-transfer protocol for the SSH companion file panel / "connect SFTP/SCP"
+  // actions. Undefined/'sftp' = SFTP (default); 'scp' for hosts without an
+  // SFTP subsystem.
+  fileTransferProto?: 'sftp' | 'scp'
   groupId?: string
   // RDP-specific
   rdpFixedWidth?: number

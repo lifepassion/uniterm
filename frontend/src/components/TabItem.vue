@@ -82,7 +82,7 @@
       <!-- ③ 连接功能（ssh / rdp） -->
       <MenuDivider />
       <MenuItem v-if="tab.type === 'rdp'" @click="enterRdpFullScreen">{{ t('rdp.fullscreen') }}</MenuItem>
-      <MenuItem v-if="isSsh" @click="openSftp">{{ t('sidebar.connectSftp') }}</MenuItem>
+      <MenuItem v-if="isSsh" @click="openSftp">{{ t(fileMenuKey) }}</MenuItem>
       <MenuItem v-if="isSsh" @click="uploadFileRz">{{ t('terminal.uploadFileRz') }}</MenuItem>
       <MenuItem v-if="isSsh" @click="openMonitor">{{ t('sidebar.connectMonitor') }}</MenuItem>
 
@@ -117,13 +117,14 @@ import {
 } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
 import type { TerminalTab, SettingsTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, WorkspaceTab } from '../types/workspace'
+import { connectFileMenuKey, fileTransferProto } from '../utils/fileTransferUtils'
 import type { ConnectionConfig } from '../types/session'
 import { useDuplicateSession } from '../composables/useDuplicateSession'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
 import MenuDivider from './MenuDivider.vue'
 import { Clipboard } from '@wailsio/runtime'
-import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow, ArrowLeftRight } from '@lucide/vue'
+import { SquareTerminal, Laptop, FolderUp, Folders, FileUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow, ArrowLeftRight } from '@lucide/vue'
 
 const props = defineProps<{
   tab: TerminalTab | SettingsTab | SFTPTab | RDPTab | VNCTab | SPICETab | DBTab | MonitorTab | WorkspaceTab
@@ -176,9 +177,15 @@ const tabIcon = computed(() => {
   if (t.type === 'settings') return Settings
   if (t.type === 'sftp') {
     const panel = panelStore.getPanel(t.panelId)
-    if (panel?.config?.type === 'smb') return HardDrive
-    if (panel?.config?.type === 's3') return Cloud
-    if (panel?.config?.type === 'webdav') return Globe
+    const ct = panel?.config?.type
+    if (ct === 'sftp') return Folders
+    if (ct === 'scp') return FileUp
+    if (ct === 'ftp') return FolderUp
+    if (ct === 'smb') return HardDrive
+    if (ct === 's3') return Cloud
+    if (ct === 'webdav') return Globe
+    // SSH-based file panels follow the connection's protocol preference.
+    if (ct === 'ssh') return fileTransferProto(panel?.config) === 'scp' ? FileUp : Folders
     return FolderUp
   }
   if (t.type === 'rdp') return Monitor
@@ -294,6 +301,14 @@ const isSsh = computed(() => {
   if (props.tab.type !== 'terminal') return false
   const p = panelStore.getPanel((props.tab as TerminalTab).panelId)
   return p?.type === 'ssh'
+})
+
+// Menu label for the file-transfer action follows the connection's protocol
+// preference (Connect SFTP / Connect SCP).
+const fileMenuKey = computed(() => {
+  if (props.tab.type !== 'terminal') return 'sidebar.connectSftp'
+  const p = panelStore.getPanel((props.tab as TerminalTab).panelId)
+  return connectFileMenuKey(p?.config)
 })
 
 // Visibility of each menu group, used to place dividers strictly between

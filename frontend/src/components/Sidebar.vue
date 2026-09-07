@@ -316,7 +316,7 @@
       <MenuItem v-if="selectedConn && selectedConn.type === 'serial'" @click="emit('connectSerial')">{{ t('sidebar.connectSerial') }}</MenuItem>
       <MenuItem v-if="selectedConn && selectedConn.type === 'tcp'" @click="doConnect">{{ t('sidebar.connectTcp') }}</MenuItem>
       <!-- File Transfer -->
-      <MenuItem v-if="selectedConn && selectedConn.type === 'ssh'" @click="doConnectSFTP">{{ t('sidebar.connectSftp') }}</MenuItem>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'ssh'" @click="doConnectSFTP">{{ t(connectFileMenuKey(selectedConn)) }}</MenuItem>
       <MenuItem v-if="selectedConn && selectedConn.type === 'ftp'" @click="doConnectFTP">{{ t('sidebar.connectFtp') }}</MenuItem>
       <MenuItem v-if="selectedConn && selectedConn.type === 'smb'" @click="doConnectSMB">{{ t('sidebar.connectSmb') }}</MenuItem>
       <MenuItem v-if="selectedConn && selectedConn.type === 's3'" @click="doConnectS3">{{ t('sidebar.connectS3') }}</MenuItem>
@@ -464,7 +464,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, nextTick, provide } from 'vue'
-import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Laptop, Cable, Pencil, MoreHorizontal, FolderTree, ShipWheel, Boxes, AppWindow, ArrowLeftRight, ArrowRightLeft } from '@lucide/vue'
+import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, Folders, FileUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Laptop, Cable, Pencil, MoreHorizontal, FolderTree, ShipWheel, Boxes, AppWindow, ArrowLeftRight, ArrowRightLeft } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { msg } from '../services/message'
 import { useConnectionStore } from '../stores/connectionStore'
@@ -490,6 +490,7 @@ import MenuSubmenu from './MenuSubmenu.vue'
 import MenuDivider from './MenuDivider.vue'
 import type { ConnectionConfig, ConnectionGroup } from '../types/session'
 import { parseQuickConnect, formatConnSubtitle, getConnectionTypeKey, getTypeCategory, formatTypeFilterLabel, getTypeFilterCatalog, isWindows } from '../utils/quickConnect'
+import { connectFileMenuKey } from '../utils/fileTransferUtils'
 import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, FOLLOW_APP_THEME, SIDEBAR_TAB_DEFAULTS, SIDEBAR_TAB_ORDER } from '../types/settings'
 import { formatFontFamily, normalizeFontFamilyValue } from '../utils/formatFontFamily'
 import { useTerminalThemeOptions } from '../composables/useTerminalThemeOptions'
@@ -1851,7 +1852,8 @@ function connIcon(conn: ConnectionConfig) {
     case 'local': return Laptop
     case 'serial': return Cable
     case 'tcp': return ArrowLeftRight
-    case 'sftp': return FolderUp
+    case 'sftp': return Folders
+    case 'scp': return FileUp
     case 'ftp': return FolderUp
     case 'smb': return HardDrive
     case 's3': return Cloud
