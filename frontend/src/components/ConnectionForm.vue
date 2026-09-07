@@ -74,12 +74,12 @@
                 </template>
               </div>
             </el-form-item>
-            <el-form-item v-if="form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop' || isElasticsearch" :label="t('conn.authType')">
+            <el-form-item v-if="form.type === 'ssh' || form.type === 'scp' || form.type === 'sftp' || form.type === 'mosh' || form.type === 'x11-desktop' || isElasticsearch" :label="t('conn.authType')">
               <el-radio-group v-model="form.authType">
                 <el-radio-button label="password">{{ t('conn.password') }}</el-radio-button>
-                <el-radio-button v-if="form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop'" label="key">{{ t('conn.keyPath') }}</el-radio-button>
-                <el-radio-button v-if="form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop'" label="keyText">{{ t('conn.keyText') }}</el-radio-button>
-                <el-radio-button v-if="form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop'" label="identity">{{ t('conn.identity') }}</el-radio-button>
+                <el-radio-button v-if="form.type === 'ssh' || form.type === 'scp' || form.type === 'sftp' || form.type === 'mosh' || form.type === 'x11-desktop'" label="key">{{ t('conn.keyPath') }}</el-radio-button>
+                <el-radio-button v-if="form.type === 'ssh' || form.type === 'scp' || form.type === 'sftp' || form.type === 'mosh' || form.type === 'x11-desktop'" label="keyText">{{ t('conn.keyText') }}</el-radio-button>
+                <el-radio-button v-if="form.type === 'ssh' || form.type === 'scp' || form.type === 'sftp' || form.type === 'mosh' || form.type === 'x11-desktop'" label="identity">{{ t('conn.identity') }}</el-radio-button>
                 <el-radio-button v-if="isElasticsearch" label="apikey">{{ t('conn.esAuthApiKey') }}</el-radio-button>
               </el-radio-group>
             </el-form-item>
@@ -90,7 +90,7 @@
               <el-input v-model="form.rdpDomain" placeholder="e.g. WORKGROUP or WIN-ABC123" />
             </el-form-item>
             <el-form-item
-              v-if="form.authType === 'identity' && (form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop')"
+              v-if="form.authType === 'identity' && (form.type === 'ssh' || form.type === 'scp' || form.type === 'sftp' || form.type === 'mosh' || form.type === 'x11-desktop')"
               :label="t('conn.identity')"
             >
               <div class="inline-add-row">
@@ -141,7 +141,7 @@
                 <el-input v-model="form.sentinelPassword" type="password" show-password :key="passwordInputKey" :placeholder="t('conn.sentinelAuthHint')" />
               </el-form-item>
             </template>
-            <el-form-item v-if="form.authType === 'key' && (form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop')" :label="t('conn.keyPath')">
+            <el-form-item v-if="form.authType === 'key' && (form.type === 'ssh' || form.type === 'scp' || form.type === 'sftp' || form.type === 'mosh' || form.type === 'x11-desktop')" :label="t('conn.keyPath')">
               <el-input v-model="form.keyPath" :placeholder="t('conn.keyPathPlaceholder')">
                 <template #append>
                   <el-tooltip :content="t('conn.selectKeyFile')" placement="top">
@@ -152,7 +152,7 @@
                 </template>
               </el-input>
             </el-form-item>
-            <el-form-item v-if="form.authType === 'keyText' && (form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop')" :label="t('conn.keyContent')">
+            <el-form-item v-if="form.authType === 'keyText' && (form.type === 'ssh' || form.type === 'scp' || form.type === 'sftp' || form.type === 'mosh' || form.type === 'x11-desktop')" :label="t('conn.keyContent')">
               <template v-if="!keyContentRevealed">
                 <el-button size="small" @click="keyContentRevealed = true">
                   <el-icon><Eye :size="14" /></el-icon>
@@ -180,8 +180,14 @@
                 </div>
               </template>
             </el-form-item>
-            <el-form-item v-if="(form.authType === 'key' || form.authType === 'keyText') && (form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop')" :label="t('conn.keyPassphrase')">
+            <el-form-item v-if="(form.authType === 'key' || form.authType === 'keyText') && (form.type === 'ssh' || form.type === 'scp' || form.type === 'sftp' || form.type === 'mosh' || form.type === 'x11-desktop')" :label="t('conn.keyPassphrase')">
               <el-input v-model="form.password" type="password" show-password :key="passwordInputKey" :placeholder="t('conn.keyPassphrasePlaceholder')" />
+            </el-form-item>
+            <el-form-item v-if="form.type === 'ssh'" :label="t('conn.fileTransferProto')">
+              <el-radio-group v-model="form.fileTransferProto">
+                <el-radio-button label="sftp">SFTP</el-radio-button>
+                <el-radio-button label="scp">SCP</el-radio-button>
+              </el-radio-group>
             </el-form-item>
             <el-form-item v-if="form.type === 'database' && form.dbType !== 'rqlite' && form.dbType !== 'redis' && form.dbType !== 'elasticsearch'" :label="t('db.databases')" :required="form.dbType === 'postgres'">
               <el-input v-model="form.dbName" :placeholder="t('db.databases')" />
@@ -512,7 +518,7 @@
                 <el-option label="VT220 Delete (ESC[3~)" value="vt220" />
               </el-select>
             </el-form-item>
-            <el-form-item v-if="form.type === 'ssh'" :label="t('conn.sftpMaxConcurrency')">
+            <el-form-item v-if="form.type === 'ssh' || form.type === 'scp'" :label="t('conn.sftpMaxConcurrency')">
               <el-input-number v-model="form.sftpMaxConcurrency" :min="0" :max="20" />
             </el-form-item>
             <el-form-item v-if="form.type === 'ssh'" :label="t('conn.x11Forwarding')">
@@ -658,7 +664,7 @@ import type { ConnectionConfig, PostLoginExpectStep } from '../types/session'
 import { OpenFileDialog, OpenPrivateKeyFile, GetPlatform, ListSerialPorts, TestConnection } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { ElInput } from 'element-plus'
 import { msg } from '../services/message'
-import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, Eye, EyeOff, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, DatabaseSearch, SquareTerminal, Zap, Laptop, Cable, FolderUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel, AppWindow, ArrowLeftRight, CircleCheck, CircleX } from '@lucide/vue'
+import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, Eye, EyeOff, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, DatabaseSearch, SquareTerminal, Zap, Laptop, Cable, FolderUp, Folders, FileUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel, AppWindow, ArrowLeftRight, CircleCheck, CircleX } from '@lucide/vue'
 import { listContexts } from '../services/k8sClient'
 import SyntaxEditor from './SyntaxEditor.vue'
 import type { K8sContextInfo } from '../types/k8s'
@@ -712,7 +718,7 @@ const categories = computed(() => [
 
 const allSubTypes = computed((): Record<string, SubTypeInfo[]> => ({
   terminal: [
-    { type: 'ssh', label: 'SSH (SFTP)', icon: SquareTerminal },
+    { type: 'ssh', label: 'SSH', icon: SquareTerminal },
     { type: 'telnet', label: 'Telnet', icon: Terminal },
     { type: 'mosh', label: 'Mosh', icon: Zap },
     { type: 'local', label: t('conn.localTerminal'), icon: Laptop },
@@ -720,6 +726,8 @@ const allSubTypes = computed((): Record<string, SubTypeInfo[]> => ({
     { type: 'tcp', label: 'TCP', icon: ArrowLeftRight },
   ],
   filetransfer: [
+    { type: 'sftp', label: 'SFTP', icon: Folders },
+    { type: 'scp', label: 'SCP', icon: FileUp },
     { type: 'ftp', label: 'FTP', icon: FolderUp },
     { type: 'smb', label: 'SMB', icon: HardDrive },
     { type: 's3', label: 'S3', icon: Cloud },
@@ -813,7 +821,7 @@ const showAdvanced = ref(false)
 
 // Connection types that support the "test connection" button (issue #377).
 // local/serial/mosh/vnc/rdp/spice/x11-desktop don't have a non-interactive probe.
-const TESTABLE_TYPES = ['ssh', 'telnet', 'ftp', 's3', 'webdav', 'smb', 'database', 'k8s', 'container', 'tcp']
+const TESTABLE_TYPES = ['ssh', 'telnet', 'ftp', 'sftp', 'scp', 's3', 'webdav', 'smb', 'database', 'k8s', 'container', 'tcp']
 // Test-connection result state: 'checking' shows a spinner; 'success'/'error'
 // keep a colored status icon on the button until the next test or a reopen.
 const testStatus = ref<'idle' | 'checking' | 'success' | 'error'>('idle')
@@ -899,7 +907,7 @@ const isEdit = computed(() => !!props.editConfig?.id)
 
 const TERMINAL_TYPES = ['ssh', 'telnet', 'mosh', 'local', 'serial']
 const REMOTE_TYPES = ['rdp', 'vnc', 'spice', 'x11-desktop']
-const FILETRANSFER_TYPES = ['ftp', 'ssh', 'smb', 'webdav', 's3']
+const FILETRANSFER_TYPES = ['sftp', 'scp', 'ftp', 'ssh', 'smb', 'webdav', 's3']
 
 // SQL-family dbTypes fall under the "SQL数据库" top-level category; anything
 // else with type 'database' falls under "NoSQL数据库" (see isSqlDbType).
@@ -922,9 +930,9 @@ const TUNNEL_UNSUPPORTED = ['spice', 'mosh', 'local', 'serial', 'container']
 const showTunnel = computed(() =>
   !TUNNEL_UNSUPPORTED.includes(form.type)
 )
-const showProxy = computed(() => ['ssh', 'sftp', 'monitor'].includes(form.type))
+const showProxy = computed(() => ['ssh', 'sftp', 'scp', 'monitor'].includes(form.type))
 const showAdvancedToggle = computed(() =>
-  showTunnel.value || form.type === 'ssh' || form.type === 'telnet' || form.type === 'mosh' || form.type === 'local' || form.type === 'serial' || form.type === 'ftp'
+  showTunnel.value || form.type === 'ssh' || form.type === 'sftp' || form.type === 'scp' || form.type === 'telnet' || form.type === 'mosh' || form.type === 'local' || form.type === 'serial' || form.type === 'ftp'
 )
 
 const isRedisSentinel = computed(() =>
@@ -979,6 +987,7 @@ const form = reactive<ConnectionConfig>({
   postLoginScript: '',
   postLoginExpectSteps: [],
   sftpMaxConcurrency: 5,
+  fileTransferProto: 'sftp' as 'sftp' | 'scp',
   x11Forwarding: false,
   ftpEncryption: 'none',
   ftpPassive: true,
@@ -1187,6 +1196,8 @@ watch(() => props.editConfig, (config) => {
     form.rdpEnableNLA = config.rdpEnableNLA ?? false
     form.rdpAdminSession = config.rdpAdminSession ?? false
     form.x11Forwarding = config.x11Forwarding ?? false
+    // Existing SSH connections without the field default to SFTP (old behavior).
+    form.fileTransferProto = config.fileTransferProto ?? 'sftp'
     postLoginMode.value = (config.postLoginExpectSteps?.length || 0) > 0 ? 'expect' : 'script'
     selectedGroupId.value = config.groupId || undefined
     // Sync serial refs from config
@@ -1249,6 +1260,8 @@ watch(() => form.type, (newType) => {
   else if (newType === 'vnc') form.port = 5900
   else if (newType === 'spice') form.port = 5900
   else if (newType === 'database') form.port = 3306
+  else if (newType === 'sftp') form.port = 22
+  else if (newType === 'scp') form.port = 22
   else if (newType === 'ftp') form.port = 21
   else if (newType === 'smb') form.port = 445
   else if (newType === 'tcp') form.port = 23
@@ -1330,6 +1343,7 @@ function resetForm() {
   form.postLoginExpectSteps = []
   postLoginMode.value = 'script'
   form.sftpMaxConcurrency = 5
+  form.fileTransferProto = 'sftp'
   form.ftpEncryption = 'none'
   form.ftpPassive = true
   form.ftpEncoding = 'utf-8'

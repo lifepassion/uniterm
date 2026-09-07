@@ -5,6 +5,7 @@ import { usePanelStore } from './panelStore'
 import { useSessionStore } from './sessionStore'
 import { useTabStore } from './tabStore'
 import { useConnectionStore } from './connectionStore'
+import { fileTransferProto } from '../utils/fileTransferUtils'
 import type { ConnectionConfig } from '../types/session'
 
 export interface CompanionEntry {
@@ -154,8 +155,11 @@ export const useCompanionStore = defineStore('companion', () => {
     }
     entry.creatingSftp = true
     try {
-      config.type = 'sftp'
-      const info = await CreateSession('sftp', config)
+      // Honor the connection's file-transfer protocol preference: 'scp' for
+      // hosts without an SFTP subsystem, 'sftp' (default) otherwise.
+      const proto = fileTransferProto(config)
+      config.type = proto
+      const info = await CreateSession(proto, config)
       entries.value = {
         ...entries.value,
         [sshPanelId]: { ...entries.value[sshPanelId], sftpSessionId: info.id, creatingSftp: false },

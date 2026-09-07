@@ -216,6 +216,7 @@ import { msg } from './services/message'
 import type { ConnectionConfig } from './types/session'
 import { Application, Clipboard, Events } from '@wailsio/runtime'
 import { parseQuickConnect } from './utils/quickConnect'
+import { fileTransferProto } from './utils/fileTransferUtils'
 
 const bgDataUrl = ref('')
 
@@ -536,9 +537,9 @@ function onCredentialResolve(result: CredentialResult | null) {
 }
 
 function needsCredentialCheck(config: ConnectionConfig): boolean {
-  const inScope = ['ssh', 'mosh', 'sftp', 'ftp'].includes(config.type)
+  const inScope = ['ssh', 'mosh', 'sftp', 'scp', 'ftp'].includes(config.type)
   if (!inScope) return false
-  if ((config.type === 'ssh' || config.type === 'mosh') && (config.authType === 'key' || config.authType === 'keyText')) return false
+  if ((config.type === 'ssh' || config.type === 'mosh' || config.type === 'scp' || config.type === 'sftp') && (config.authType === 'key' || config.authType === 'keyText')) return false
   // 身份认证：账密来自身份库，由后端 materializeIdentity 解析，无需补全提示
   if (config.authType === 'identity') return false
   return !config.user || !config.password
@@ -1298,6 +1299,8 @@ async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?:
     // though it will not be persisted to the connection list.
     config.id = `conn-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
   }
+  if (config.type === 'sftp') { await onConnectSftp(config, prevStart, persist); return }
+  if (config.type === 'scp') { await onConnectScp(config, prevStart, persist); return }
   if (config.type === 'ftp') { await onConnectFtp(config, prevStart, persist); return }
   if (config.type === 'smb') { await onConnectSmb(config, prevStart, persist); return }
   if (config.type === 'webdav') { await onConnectWebdav(config, prevStart, persist); return }
@@ -1509,10 +1512,39 @@ async function onConnectSftp(config: ConnectionConfig, prevStart?: any) {
   RecordRecentConnection(config.id)
 
   try {
-    const info = await CreateSession('sftp', config)
+    // Honor the connection's file-transfer protocol preference ('scp' for
+    // hosts without an SFTP subsystem); the panel/tab stay type 'sftp' since
+    // the file browser UI is protocol-agnostic.
+    const proto = fileTransferProto(config)
+    const info = await CreateSession(proto, config)
     panelStore.bindSession(panel.id, info.id)
   } catch (e) {
     console.error('Failed to create SFTP session:', e)
+    tabStore.closeTab(tab.id)
+    panelStore.removePanel(panel.id)
+  }
+}
+
+async function onConnectScp(config: ConnectionConfig, prevStart?: any, persist = true) {
+  if (persist) connectionStore.add(config)
+
+  const resolved = await ensureCredentials(config)
+  if (!resolved) return
+  config = resolved
+  const panel = panelStore.createPanel(config, 'sftp')
+  const displayTitle = config.name || `${config.user}@${config.host}`
+  panelStore.updateTitle(panel.id, displayTitle)
+  const reposition = prevStart ? closeStartAndReposition(prevStart) : null
+  const tab = tabStore.createFtpTab(displayTitle, panel.id)
+  if (reposition) reposition(tab.id)
+  panelStore.movePanelToTab(panel.id, tab.id)
+  if (persist) RecordRecentConnection(config.id)
+
+  try {
+    const info = await CreateSession('scp', config)
+    panelStore.bindSession(panel.id, info.id)
+  } catch (e) {
+    console.error('Failed to create SCP session:', e)
     tabStore.closeTab(tab.id)
     panelStore.removePanel(panel.id)
   }
@@ -1865,7 +1897,11 @@ async function reconnectSftpPanel(panel: { id: string; sessionId: string | null;
   const cfg = panel.config
   if (!cfg || !cfg.type) return
   try {
-    const info = await CreateSession(cfg.type, cfg)
+    // SSH-based file panels carry the protocol preference on the config; the
+    // file-transfer types (ftp/smb/...) already match their session type.
+    const proto = fileTransferProto(cfg)
+    const sessionType = cfg.type === 'ssh' ? proto : cfg.type
+    const info = await CreateSession(sessionType, cfg)
     panelStore.bindSession(panel.id, info.id)
     sessionStore.initSession(info.id)
   } catch (e: any) {

@@ -12,6 +12,7 @@ const QUICK_PROTOCOLS: Record<string, { type: string; dbType?: string; defaultPo
   spice: { type: 'spice' },
   ftp: { type: 'ftp', defaultPort: 21 },
   sftp: { type: 'sftp', defaultPort: 22 },
+  scp: { type: 'scp', defaultPort: 22 },
   smb: { type: 'smb', defaultPort: 445 },
   s3: { type: 's3' },
   webdav: { type: 'webdav' },
@@ -117,7 +118,7 @@ export function getTypeBaseType(key: string): string {
 // layout of the new-connection form (ConnectionForm `categories`).
 export const TYPE_CATEGORY: Record<string, string> = {
   ssh: 'terminal', telnet: 'terminal', mosh: 'terminal', local: 'terminal', serial: 'terminal', tcp: 'terminal', monitor: 'terminal',
-  sftp: 'filetransfer', ftp: 'filetransfer', smb: 'filetransfer', s3: 'filetransfer', webdav: 'filetransfer',
+  sftp: 'filetransfer', scp: 'filetransfer', ftp: 'filetransfer', smb: 'filetransfer', s3: 'filetransfer', webdav: 'filetransfer',
   rdp: 'remote', vnc: 'remote', spice: 'remote', 'x11-desktop': 'remote',
   database: 'database',
   k8s: 'container', container: 'container',
@@ -175,7 +176,7 @@ export function getTypeFilterCatalog(t: (key: string) => string, isWin = false) 
       key: 'terminal',
       label: t('conn.categoryTerminal'),
       items: [
-        { key: 'ssh', label: 'SSH (SFTP)' },
+        { key: 'ssh', label: 'SSH' },
         { key: 'telnet', label: 'Telnet' },
         { key: 'mosh', label: 'Mosh' },
         { key: 'local', label: t('conn.localTerminal') },
@@ -187,6 +188,8 @@ export function getTypeFilterCatalog(t: (key: string) => string, isWin = false) 
       key: 'filetransfer',
       label: t('conn.categoryFileTransfer'),
       items: [
+        { key: 'sftp', label: 'SFTP' },
+        { key: 'scp', label: 'SCP' },
         { key: 'ftp', label: 'FTP' },
         { key: 'smb', label: 'SMB' },
         { key: 's3', label: 'S3' },

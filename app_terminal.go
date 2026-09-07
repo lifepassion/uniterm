@@ -136,14 +136,17 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 		})
 	}
 
-	// SFTP concurrency limit
-	if sessionType == "sftp" {
+	// SFTP/SCP concurrency limit
+	if sessionType == "sftp" || sessionType == "scp" {
+		n := config.SftpMaxConcurrency
+		if n <= 0 {
+			n = 5
+		}
 		if sftp, ok := s.(*session.SFTPSession); ok {
-			n := config.SftpMaxConcurrency
-			if n <= 0 {
-				n = 5
-			}
 			sftp.SetMaxConcurrency(n)
+		}
+		if scp, ok := s.(*session.SCPSession); ok {
+			scp.SetMaxConcurrency(n)
 		}
 	}
 

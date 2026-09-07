@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/jlaffaye/ftp"
+	"github.com/pkg/sftp"
 	"github.com/redis/go-redis/v9"
 	"github.com/rhnvrm/simples3"
 	"github.com/studio-b12/gowebdav"
@@ -45,6 +46,10 @@ func ProbeConnection(config ConnectionConfig) (string, error) {
 		return probeTCP(config)
 	case "ftp":
 		return probeFTP(config)
+	case "sftp":
+		return probeSFTP(config)
+	case "scp":
+		return probeSCP(config)
 	case "s3":
 		return probeS3(config)
 	case "webdav":
@@ -97,6 +102,68 @@ func probeSSH(config ConnectionConfig) (string, error) {
 	}
 	defer client.Close()
 	return fmt.Sprintf("ssh: connected as %s@%s:%d", config.User, config.Host, config.Port), nil
+}
+
+// probeSFTP verifies SSH connectivity AND completes the SFTP subsystem
+// handshake, so a failed test reports hosts where the subsystem is disabled
+// (those hosts should use an SCP connection instead).
+func probeSFTP(config ConnectionConfig) (string, error) {
+	kb := func(user, instruction string, questions []string, echos []bool) ([]string, error) {
+		return nil, fmt.Errorf("interactive auth not allowed during connection test")
+	}
+	authMethods := makeSSHAuthMethods(config, kb)
+	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
+	clientConfig := &ssh.ClientConfig{
+		User:            config.User,
+		Auth:            authMethods,
+		Timeout:         15 * time.Second,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+	client, err := dialSSHWithCipherFallback(addr, clientConfig, func() (net.Conn, error) {
+		return dialFirstHop(addr, config.Proxy)
+	})
+	if err != nil {
+		return "", fmt.Errorf("sftp: %w", err)
+	}
+	defer client.Close()
+	sc, err := sftp.NewClient(client)
+	if err != nil {
+		return "", fmt.Errorf("sftp: %w", err)
+	}
+	_ = sc.Close()
+	return fmt.Sprintf("sftp: connected as %s@%s:%d", config.User, config.Host, config.Port), nil
+}
+
+// probeSCP verifies SSH connectivity AND that the exec channel (which the SCP
+// transfer engine drives) is usable — a plain shell command round-trip.
+func probeSCP(config ConnectionConfig) (string, error) {
+	kb := func(user, instruction string, questions []string, echos []bool) ([]string, error) {
+		return nil, fmt.Errorf("interactive auth not allowed during connection test")
+	}
+	authMethods := makeSSHAuthMethods(config, kb)
+	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
+	clientConfig := &ssh.ClientConfig{
+		User:            config.User,
+		Auth:            authMethods,
+		Timeout:         15 * time.Second,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+	client, err := dialSSHWithCipherFallback(addr, clientConfig, func() (net.Conn, error) {
+		return dialFirstHop(addr, config.Proxy)
+	})
+	if err != nil {
+		return "", fmt.Errorf("scp: %w", err)
+	}
+	defer client.Close()
+	sess, err := client.NewSession()
+	if err != nil {
+		return "", fmt.Errorf("scp: exec channel: %w", err)
+	}
+	defer sess.Close()
+	if _, err := sess.Output("pwd"); err != nil {
+		return "", fmt.Errorf("scp: exec channel: %w", err)
+	}
+	return fmt.Sprintf("scp: connected as %s@%s:%d", config.User, config.Host, config.Port), nil
 }
 
 func probeTelnet(config ConnectionConfig) (string, error) {
