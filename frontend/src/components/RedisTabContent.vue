@@ -36,7 +36,7 @@
               :class="{ selected: selectedKey === keyInfo.name }"
               @click="onSelectKey(keyInfo)"
             >
-              <span class="table-icon-spacer" />
+              <span class="key-leaf-spacer" />
               <span class="key-type-badge">{{ keyInfo.type }}</span>
               <span class="key-name">{{ keyInfo.name }}</span>
             </div>
@@ -402,9 +402,9 @@ function onSelectTreeKey(node: KeyNode) {
 }
 
 // Recursive tree node rendered inline (script-setup local component).
-// Classes mirror DBTreePanel: folders use the db-header look (13px semibold,
-// chevron arrow), leaves the table-item look (13px, icon spacer keeps text
-// aligned with the folder label).
+// All rows share the flat list's .key-item rule set — one font, one row
+// height; folders add .folder for the bold label, leaves keep the same
+// 12px arrow column so text aligns with the flat list's badge column.
 const TreeRow = defineComponent({
   name: 'RedisTreeRow',
   props: { node: { type: Object as PropType<KeyNode>, required: true }, depth: { type: Number, required: true } },
@@ -413,12 +413,12 @@ const TreeRow = defineComponent({
       const n = rowProps.node
       if (n.children.length === 0) {
         return h('div', {
-          class: ['table-item', { selected: selectedKey.value === n.keyName }],
+          class: ['key-item', { selected: selectedKey.value === n.keyName }],
           onClick: () => onSelectTreeKey(n),
         }, [
-          h('span', { class: 'table-icon-spacer' }),
+          h('span', { class: 'key-leaf-spacer' }),
           h('span', { class: 'key-type-badge' }, n.keyType),
-          h('span', { class: 'table-name' }, n.label),
+          h('span', { class: 'key-name' }, n.label),
         ])
       }
       const expanded = expandedFolders.value.has(n.id)
@@ -437,8 +437,6 @@ const TreeRow = defineComponent({
       ]
       if (expanded) {
         for (const child of n.children) {
-          // Each level indents by the folder's own icon column width, the
-          // same visual rhythm as DBTreePanel's arrow + icon column.
           rows.push(h('div', { class: 'tree-children' }, [
             h(TreeRow, { node: child, depth: rowProps.depth + 1, key: child.id }),
           ]))
@@ -834,6 +832,11 @@ watch(() => props.sessionId, async (newId) => {
 }
 .key-item:hover { background: var(--bg-hover); }
 .key-item.selected { background: var(--bg-hover); color: var(--accent); }
+/* One row style for both tree and flat rendering — tree rows used to carry a
+   second, partly-inheriting rule set (.table-item/.table-name) whose missing
+   font-family/size made them render a size off next to the flat list. Every
+   row is a .key-item; folders add .folder for the bold label. Indentation:
+   arrow column (12px) + gap so leaf text lines up under folder labels. */
 .key-type-badge {
   font-size: 11px;
   font-weight: 600;
@@ -851,10 +854,6 @@ watch(() => props.sessionId, async (newId) => {
   white-space: nowrap;
   user-select: none;
 }
-/* Tree rows borrow DBTreePanel's visual language. The classes are re-declared
-   here because both components' styles are scoped — DBTreePanel's rules carry
-   its own data-v hash and never reach this component's DOM. Values are copied
-   verbatim (13px rows, 12px muted chevron/icon) so both trees read identical. */
 .db-header {
   display: flex;
   align-items: center;
@@ -863,6 +862,9 @@ watch(() => props.sessionId, async (newId) => {
   cursor: pointer;
   user-select: none;
   transition: background 0.12s ease;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text-primary);
 }
 .db-header:hover {
   background: var(--bg-hover);
@@ -891,32 +893,9 @@ watch(() => props.sessionId, async (newId) => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.table-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.12s ease;
-}
-.table-item:hover {
-  background: var(--bg-hover);
-}
-.table-item.selected {
-  background: var(--bg-hover);
-}
-.table-icon-spacer {
-  width: 30px;
+.key-leaf-spacer {
+  width: 12px;
   flex-shrink: 0;
-}
-.table-name {
-  font-family: var(--font-ui);
-  font-size: 13px;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .tree-children {
   padding-left: 18px;
