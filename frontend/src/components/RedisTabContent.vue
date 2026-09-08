@@ -36,7 +36,6 @@
               :class="{ selected: selectedKey === keyInfo.name }"
               @click="onSelectKey(keyInfo)"
             >
-              <span class="key-leaf-spacer" />
               <span class="key-type-badge">{{ keyInfo.type }}</span>
               <span class="key-name">{{ keyInfo.name }}</span>
             </div>
