@@ -74,6 +74,7 @@
               v-else-if="activeTab.type === 'redis'"
               :key="activeTab.id"
               :session-id="getPanelSessionId(activeTab.panelId) || ''"
+              :key-separator="getPanelConfig(activeTab.panelId)?.redisKeySeparator ?? ''"
             />
             <MongoDBTabContent
               v-else-if="activeTab.type === 'mongodb'"

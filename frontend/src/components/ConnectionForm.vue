@@ -57,6 +57,9 @@
                 <el-radio-button label="sentinel">{{ t('conn.redisModeSentinel') }}</el-radio-button>
               </el-radio-group>
             </el-form-item>
+            <el-form-item v-if="form.type === 'database' && form.dbType === 'redis'" :label="t('conn.redisKeySeparator')">
+              <el-input v-model="form.redisKeySeparator" :placeholder="t('conn.redisKeySeparatorPlaceholder')" style="width: 160px" />
+            </el-form-item>
             <template v-if="isRedisSentinel">
               <el-form-item :label="t('conn.redisSentinels')" required>
                 <el-input v-model="form.redisSentinels" :placeholder="t('conn.redisSentinelsPlaceholder')" />
@@ -982,6 +985,7 @@ const form = reactive<ConnectionConfig>({
   redisMode: 'standalone',
   redisMasterName: '',
   redisSentinels: '',
+  redisKeySeparator: '',
   sentinelUser: '',
   sentinelPassword: '',
   postLoginScript: '',
@@ -1337,6 +1341,7 @@ function resetForm() {
   form.redisMode = 'standalone'
   form.redisMasterName = ''
   form.redisSentinels = ''
+  form.redisKeySeparator = ''
   form.sentinelUser = ''
   form.sentinelPassword = ''
   form.postLoginScript = ''

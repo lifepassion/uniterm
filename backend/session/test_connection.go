@@ -312,7 +312,16 @@ func probeRedis(config ConnectionConfig) (string, error) {
 	if _, err := client.Ping(ctx).Result(); err != nil {
 		return "", fmt.Errorf("redis ping: %w", err)
 	}
-	return "redis: pong", nil
+	return fmt.Sprintf("redis: connected to %s", probeRedisAddr(config)), nil
+}
+
+// probeRedisAddr describes the probe target: sentinel connections report the
+// master name (the actual master can change), standalone reports host:port.
+func probeRedisAddr(config ConnectionConfig) string {
+	if config.RedisMode == "sentinel" {
+		return "sentinel master " + config.RedisMasterName
+	}
+	return fmt.Sprintf("%s:%d", config.Host, config.Port)
 }
 
 func probeMongo(config ConnectionConfig) (string, error) {

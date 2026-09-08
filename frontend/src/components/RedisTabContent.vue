@@ -9,23 +9,38 @@
             <el-option v-for="n in 16" :key="n-1" :label="`${n-1} (${dbSizes[n-1] ?? '?'})`" :value="n-1" />
           </el-select>
           <el-input v-model="scanPattern" size="small" placeholder="*" style="flex: 1; min-width: 80px" @keyup.enter="onScan" />
-          <button class="btn btn-ghost btn-icon btn-sm" title="Refresh" @click="onScan" style="flex-shrink: 0"><RefreshCw :size="14" /></button>
+          <button class="btn btn-ghost btn-icon btn-sm" :title="t('redis.refresh')" @click="onScan" style="flex-shrink: 0"><RefreshCw :size="14" /></button>
+          <button class="btn btn-ghost btn-icon btn-sm" :title="treeMode ? t('redis.flatView') : t('redis.treeView')" @click="treeMode = !treeMode" style="flex-shrink: 0">
+            <Folder :size="14" v-if="!treeMode" />
+            <List :size="14" v-else />
+          </button>
           <button class="btn btn-ghost btn-icon btn-sm" :title="t('redis.newKey')" @click="onShowNewKeyDialog" style="flex-shrink: 0"><Plus :size="14" /></button>
         </div>
 
-        <!-- Key list -->
+        <!-- Key tree / flat list -->
         <div class="redis-key-list" v-loading="loading">
           <div v-if="keys.length === 0 && !loading" class="redis-placeholder">{{ t('redis.noKeys') }}</div>
-          <div
-            v-for="keyInfo in keys"
-            :key="keyInfo.name"
-            class="key-item"
-            :class="{ selected: selectedKey === keyInfo.name }"
-            @click="onSelectKey(keyInfo)"
-          >
-            <span class="key-type-badge">{{ keyInfo.type }}</span>
-            <span class="key-name">{{ keyInfo.name }}</span>
-          </div>
+          <template v-else-if="treeMode">
+            <TreeNode
+              v-for="node in keyTree"
+              :key="node.id"
+              :node="node"
+              :depth="0"
+            />
+          </template>
+          <template v-else>
+            <div
+              v-for="keyInfo in keys"
+              :key="keyInfo.name"
+              class="key-item"
+              :class="{ selected: selectedKey === keyInfo.name }"
+              @click="onSelectKey(keyInfo)"
+            >
+              <span class="key-leaf-spacer" />
+              <span class="key-type-badge">{{ keyInfo.type }}</span>
+              <span class="key-name">{{ keyInfo.name }}</span>
+            </div>
+          </template>
         </div>
 
         <!-- Pagination -->
@@ -266,10 +281,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onUnmounted } from 'vue'
+import { ref, watch, computed, onUnmounted, h, defineComponent, type PropType } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { msg } from '../services/message'
-import { Trash2, Plus, GripVertical, RefreshCw, ChevronLeft, ChevronRight } from '@lucide/vue'
+import { Trash2, Plus, GripVertical, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Folder, List } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import {
   RedisScanKeys,
@@ -295,8 +310,143 @@ import {
 } from '../../bindings/github.com/ys-ll/uniterm/app'
 import type { RedisKeyInfo, FieldEntry, ScoredMember, ScanResult } from '../types/redis'
 
-const props = defineProps<{ sessionId: string }>()
+const props = defineProps<{ sessionId: string; keySeparator?: string }>()
 const { t } = useI18n()
+
+// Separator for tree grouping; defaults to ":" when empty — the namespace
+// convention shared by every Redis GUI. Grouping only ever reflects the
+// currently scanned page (SCAN is random-order), so folder counts are lower
+// bounds; the folder badge renders as "N+" to say so.
+const separator = computed(() => (props.keySeparator ?? '').length === 1 ? props.keySeparator! : ':')
+const treeMode = ref(true)
+const keyTree = computed(() => treeMode.value ? buildKeyTree(keys.value, separator.value) : [])
+
+// ── Key tree building ──
+// Nodes are built from the currently scanned page of keys by splitting names
+// on the separator. Folder counts are recursive sums over loaded keys only —
+// the same approximation every Redis GUI makes.
+
+interface KeyNode {
+  id: string          // full path from root, e.g. "app:cache"
+  label: string       // last segment
+  count: number       // leaf keys under this node (recursive)
+  children: KeyNode[] // empty array = leaf key
+  keyName?: string    // leaf only: full redis key
+  keyType?: RedisKeyInfo['type']  // leaf only
+}
+
+function buildKeyTree(keys: RedisKeyInfo[], sep: string): KeyNode[] {
+  interface RawNode { children: Map<string, RawNode>; key?: RedisKeyInfo }
+  const root: RawNode = { children: new Map(), key: undefined }
+
+  for (const info of keys) {
+    const parts = info.name.split(sep)
+    let cur = root
+    for (let i = 0; i < parts.length; i++) {
+      if (i === parts.length - 1) {
+        // Leaf slot keyed by the last segment (unique within its folder); the
+        // marker prefix keeps it distinct from a same-named folder slot —
+        // keys "app" and "app:cache" really do coexist in Redis.
+        cur.children.set('\x00' + parts[i], { children: new Map(), key: info })
+      } else {
+        let next = cur.children.get(parts[i])
+        if (!next) {
+          next = { children: new Map(), key: undefined }
+          cur.children.set(parts[i], next)
+        }
+        cur = next
+      }
+    }
+  }
+
+  // Convert nested maps to display nodes.
+  const toNodes = (raw: RawNode, path: string): KeyNode[] => {
+    const nodes: KeyNode[] = []
+    for (const [seg, child] of raw.children) {
+      if (seg.startsWith('\x00')) {
+        const info = child.key!
+        nodes.push({ id: info.name, label: seg.slice(1), count: 1, children: [], keyName: info.name, keyType: info.type })
+        continue
+      }
+      const childPath = path ? path + sep + seg : seg
+      const grandchildren = toNodes(child, childPath)
+      nodes.push({
+        id: childPath,
+        label: seg,
+        count: grandchildren.reduce((a, n) => a + n.count, 0),
+        children: grandchildren,
+      })
+    }
+    return nodes.sort((a, b) => {
+      // folders before keys, then alphabetical — same rule as the other GUIs
+      if (a.children.length !== b.children.length) return a.children.length ? -1 : 1
+      return a.label.localeCompare(b.label)
+    })
+  }
+  return toNodes(root, '')
+}
+
+const expandedFolders = ref(new Set<string>())
+
+function onToggleFolder(id: string) {
+  const next = new Set(expandedFolders.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  expandedFolders.value = next
+}
+
+function onSelectTreeKey(node: KeyNode) {
+  if (node.keyName) {
+    onSelectKey({ name: node.keyName, type: node.keyType || 'string', ttl: -1 } as RedisKeyInfo)
+  }
+}
+
+// Recursive tree node rendered inline (script-setup local component).
+// All rows share the flat list's .key-item rule set — one font, one row
+// height; folders add .folder for the bold label, leaves keep the same
+// 12px arrow column so text aligns with the flat list's badge column.
+const TreeRow = defineComponent({
+  name: 'RedisTreeRow',
+  props: { node: { type: Object as PropType<KeyNode>, required: true }, depth: { type: Number, required: true } },
+  setup(rowProps) {
+    return () => {
+      const n = rowProps.node
+      if (n.children.length === 0) {
+        return h('div', {
+          class: ['key-item', { selected: selectedKey.value === n.keyName }],
+          onClick: () => onSelectTreeKey(n),
+        }, [
+          h('span', { class: 'key-leaf-spacer' }),
+          h('span', { class: 'key-type-badge' }, n.keyType),
+          h('span', { class: 'key-name' }, n.label),
+        ])
+      }
+      const expanded = expandedFolders.value.has(n.id)
+      const rows = [
+        h('div', {
+          class: 'db-header',
+          title: t('redis.folderCountHint', { n: n.count }),
+          onClick: () => onToggleFolder(n.id),
+        }, [
+          h('span', { class: 'db-arrow', onClick: (e: MouseEvent) => { e.stopPropagation(); onToggleFolder(n.id) } },
+            [h(expanded ? ChevronDown : ChevronRight, { size: 12 })]),
+          h(Folder, { class: 'db-icon', size: 14 }),
+          h('span', { class: 'db-name' }, n.label),
+          h('span', { class: 'folder-count' }, n.count + '+'),
+        ]),
+      ]
+      if (expanded) {
+        for (const child of n.children) {
+          rows.push(h('div', { class: 'tree-children' }, [
+            h(TreeRow, { node: child, depth: rowProps.depth + 1, key: child.id }),
+          ]))
+        }
+      }
+      return rows
+    }
+  },
+})
+const TreeNode = TreeRow
 
 // --- Resize ---
 const leftWidth = ref(280)
@@ -393,6 +543,7 @@ async function doScan(cursor: number) {
     keys.value = (result.keys || []).sort((a, b) => a.name.localeCompare(b.name))
     nextCursor.value = result.cursor
     hasMore.value = result.cursor !== 0
+    if (cursor === 0) expandedFolders.value = new Set()
   } catch (e: any) {
     msg.error(`Scan failed: ${e?.message || e}`)
     keys.value = []
@@ -668,19 +819,24 @@ watch(() => props.sessionId, async (newId) => {
   overflow-y: auto;
 }
 .key-item {
-  padding: 6px 10px;
+  padding: 6px 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-primary);
   transition: background 0.12s ease;
   user-select: none;
 }
 .key-item:hover { background: var(--bg-hover); }
 .key-item.selected { background: var(--bg-hover); color: var(--accent); }
+/* One row style for both tree and flat rendering — tree rows used to carry a
+   second, partly-inheriting rule set (.table-item/.table-name) whose missing
+   font-family/size made them render a size off next to the flat list. Every
+   row is a .key-item; folders add .folder for the bold label. Indentation:
+   arrow column (12px) + gap so leaf text lines up under folder labels. */
 .key-type-badge {
   font-size: 11px;
   font-weight: 600;
@@ -697,6 +853,60 @@ watch(() => props.sessionId, async (newId) => {
   text-overflow: ellipsis;
   white-space: nowrap;
   user-select: none;
+}
+.db-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s ease;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.db-header:hover {
+  background: var(--bg-hover);
+}
+.db-arrow {
+  width: 12px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.db-arrow:hover {
+  color: var(--text-primary);
+}
+.db-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+.db-name {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.key-leaf-spacer {
+  width: 12px;
+  flex-shrink: 0;
+}
+.tree-children {
+  padding-left: 18px;
+}
+.folder-count {
+  margin-left: auto;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  flex-shrink: 0;
 }
 .redis-pagination {
   display: flex;
