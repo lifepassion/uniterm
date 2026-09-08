@@ -44,6 +44,12 @@
       @blur="confirmEdit"
       @click.stop
     />
+    <Radio
+      v-if="showBroadcastIcon"
+      class="tab-broadcast-icon"
+      :size="14"
+      :title="t('tab.unbroadcast')"
+    />
     <button
       v-if="tabCloseRight"
       class="tab-close tab-close-right"
@@ -64,6 +70,9 @@
       <MenuItem v-if="hasLocatableConnection" @click="locateHost">{{ t('tab.locate') }}</MenuItem>
       <MenuItem v-if="tab.type !== 'start' && tab.type !== 'settings'" @click="toggleLock">
         {{ tab.locked ? t('tab.unlock') : t('tab.lock') }}
+      </MenuItem>
+      <MenuItem v-if="canBroadcast" @click="toggleBroadcastTarget">
+        {{ isBroadcastTarget ? t('tab.unbroadcast') : t('tab.broadcast') }}
       </MenuItem>
 
       <!-- ② 会话文本操作 -->
@@ -124,7 +133,7 @@ import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
 import MenuDivider from './MenuDivider.vue'
 import { Clipboard } from '@wailsio/runtime'
-import { SquareTerminal, Laptop, FolderUp, Folders, FileUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow, ArrowLeftRight } from '@lucide/vue'
+import { SquareTerminal, Laptop, FolderUp, Folders, FileUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow, ArrowLeftRight, Radio } from '@lucide/vue'
 
 const props = defineProps<{
   tab: TerminalTab | SettingsTab | SFTPTab | RDPTab | VNCTab | SPICETab | DBTab | MonitorTab | WorkspaceTab
@@ -225,6 +234,34 @@ const isAILocked = computed(() => {
   if (props.tab.type !== 'terminal') return false
   return tabStore.isPanelAILocked(props.tab.panelId)
 })
+
+// Whether the tab can be a broadcast target / driver. Only ssh/local-backed
+// terminal tabs (broadcast only routes ssh/local sessions) and workspace tabs.
+const canBroadcast = computed(() => {
+  if (props.tab.type === 'workspace') return true
+  if (props.tab.type === 'terminal') {
+    const p = panelStore.getPanel((props.tab as TerminalTab).panelId)
+    return !!p && (p.type === 'ssh' || p.type === 'local')
+  }
+  return false
+})
+
+// Tab-level broadcast status — derived from broadcastPanelIds, so it stays in
+// sync with each panel's broadcast button.
+const isBroadcastTarget = computed(() =>
+  tabStore.isTabBroadcastTarget(props.tab.id)
+)
+
+// When the right-side close button shows (right-close setting + hover + not
+// locked), it replaces the broadcast status icon exactly like the left close
+// button replaces the tab icon in the default layout. Otherwise the icon stays
+// visible. In the default (left-close) layout there is no right close button,
+// so the icon is always shown.
+const showBroadcastIcon = computed(() =>
+  canBroadcast.value &&
+  isBroadcastTarget.value &&
+  !(tabCloseRight.value && hovered.value && !props.tab.locked)
+)
 
 
 const hasActiveTransfers = computed(() => {
@@ -413,6 +450,15 @@ function toggleLock() {
   closeContextMenu()
 }
 
+function toggleBroadcastTarget() {
+  if (isBroadcastTarget.value) {
+    tabStore.disableBroadcastForTab(props.tab.id)
+  } else {
+    tabStore.enableBroadcastForTab(props.tab.id)
+  }
+  closeContextMenu()
+}
+
 function toggleAiLock() {
   if (props.tab.type === 'terminal') {
     emit('toggleAiLock', props.tab.panelId)
@@ -569,7 +615,7 @@ onMounted(async () => {
   align-items: center;
   gap: 2px;
   height: 28px;
-  min-width: 120px;
+  min-width: 144px;
   padding: 0 12px;
   margin: 0 1px;
   cursor: pointer;
@@ -632,6 +678,17 @@ onMounted(async () => {
   width: 14px;
   height: 14px;
   color: var(--text-muted);
+}
+/* Broadcast status icon sits in the right-side close-button slot, mirrored
+   vertically/horizontally with it. It's toggled off (v-if) whenever the close
+   button is shown, so the two never overlap — same as the tab icon being
+   replaced by the left close button in the default layout. */
+.tab-broadcast-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--accent);
 }
 .tab-notification-dot {
   position: absolute;
@@ -707,5 +764,10 @@ onMounted(async () => {
 }
 .tab-close-right-ghost {
   visibility: hidden;
+  /* Hide instantly on mouse-leave: `.tab-close` carries transition:all, and
+     visibility is a transitionable property, so a visible→hidden ghost would
+     otherwise linger for the transition duration — overlapping the broadcast
+     status icon that swaps in via v-if at the same slot. */
+  transition: visibility 0s;
 }
 </style>

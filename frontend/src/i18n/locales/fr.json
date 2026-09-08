@@ -125,6 +125,8 @@
   "tab.copyHostAddress": "Copier l'adresse de l'hôte",
   "tab.hostCopied": "Adresse de l'hôte copiée : {host}",
   "tab.rename": "Renommer",
+  "tab.broadcast": "Diffuser vers cet onglet",
+  "tab.unbroadcast": "Annuler la diffusion vers cet onglet",
   "tab.locate": "Localiser la connexion",
   "tab.closeRight": "Fermer les onglets à droite",
   "tab.closeLeft": "Fermer les onglets à gauche",
