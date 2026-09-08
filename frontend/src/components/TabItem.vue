@@ -51,7 +51,7 @@
       :title="t('tab.unbroadcast')"
     />
     <button
-      v-if="tabCloseRight"
+      v-if="tabCloseRight && !showBroadcastIcon"
       class="tab-close tab-close-right"
       :class="{ 'tab-close-right-ghost': !hovered || tab.locked }"
       @click.stop="$emit('close', tab.id)"
@@ -255,11 +255,12 @@ const isBroadcastTarget = computed(() =>
   tabStore.isTabBroadcastTarget(props.tab.id)
 )
 
-// When the right-side close button shows (right-close setting + hover + not
-// locked), it replaces the broadcast status icon exactly like the left close
-// button replaces the tab icon in the default layout. Otherwise the icon stays
-// visible. In the default (left-close) layout there is no right close button,
-// so the icon is always shown.
+// The broadcast icon and the right close button share one far-right slot,
+// so they are mutually exclusive: show the icon only while actually
+// broadcasting, and while the right X would be visible (right-close setting +
+// hover + not locked) show the X instead — the template v-if's out whichever
+// one isn't shown so they never coexist. In the default (left-close) layout
+// there is no right X, so the icon is always shown.
 const showBroadcastIcon = computed(() =>
   canBroadcast.value &&
   isBroadcastTarget.value &&
@@ -682,15 +683,18 @@ onMounted(async () => {
   height: 14px;
   color: var(--text-muted);
 }
-/* Broadcast status icon sits in the right-side close-button slot, mirrored
-   vertically/horizontally with it. It's toggled off (v-if) whenever the close
-   button is shown, so the two never overlap — same as the tab icon being
-   replaced by the left close button in the default layout. */
+/* Broadcast status icon occupies the exact same far-right slot as the right
+   close button: with margin-left:auto it pushes to the edge, and the right X
+   is v-if'd out of the DOM (see template) whenever the icon is shown, so the
+   two are never siblings — the icon sits precisely where the X would. In the
+   default (left-close) layout there is no right X, so the icon always takes
+   the slot. Reserving real layout space (not absolute positioning) means it
+   never overlaps the tab name. */
 .tab-broadcast-icon {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: auto;
   color: var(--accent);
 }
 .tab-notification-dot {
@@ -769,8 +773,7 @@ onMounted(async () => {
   visibility: hidden;
   /* Hide instantly on mouse-leave: `.tab-close` carries transition:all, and
      visibility is a transitionable property, so a visible→hidden ghost would
-     otherwise linger for the transition duration — overlapping the broadcast
-     status icon that swaps in via v-if at the same slot. */
+     otherwise linger for the transition duration. */
   transition: visibility 0s;
 }
 </style>
