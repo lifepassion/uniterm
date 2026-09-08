@@ -31,6 +31,7 @@ jobs:
       GOOS: linux
       GOARCH: arm64
       VERSION: ${{ inputs.version || 'v1.9.2-kylin-arm64' }}
+      VITE_VERSION: ${{ inputs.version || 'v1.9.2-kylin-arm64' }}
 
     steps:
 
@@ -244,7 +245,7 @@ jobs:
           echo "===== Dynamic dependencies ====="
           ldd bin/uniTerm | tee /tmp/uniterm-ldd.txt
           if grep -q 'not found' /tmp/uniterm-ldd.txt; then exit 1; fi
-          readelf -h bin/uniTerm | grep -q 'AArch64' 
+          readelf -h bin/uniTerm | grep -q 'AArch64'
 
           echo "===== GTK/WebKit/Soup dependencies ====="
           ldd bin/uniTerm \
@@ -308,6 +309,15 @@ jobs:
           echo "OK: no WebKitGTK 4.1 dependency"
           echo "OK: no libsoup 3 dependency"
 
+      - name: Test Wails RPC in a real desktop window
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cp build/kylin/smoke.go.txt /tmp/kylin-smoke.go
+          go build -tags production,gtk3 -o /tmp/kylin-smoke /tmp/kylin-smoke.go
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 LIBGL_ALWAYS_SOFTWARE=1 \
+            xvfb-run -a /tmp/kylin-smoke
+
       - name: Create tar.gz package
         shell: bash
         run: |
@@ -321,6 +331,7 @@ jobs:
           install -m 755 \
             bin/uniTerm \
             dist/uniterm/uniterm
+          cp LICENSE dist/uniterm/LICENSE
 
           cat > dist/uniterm/README-KYLIN.txt <<'EOF'
           uniTerm ARM64
@@ -421,6 +432,10 @@ jobs:
           Categories=Development;System;TerminalEmulator;
           EOF
           fi
+
+          sed -i 's|^Exec=.*|Exec=/usr/bin/uniterm|; s|^Icon=.*|Icon=uniterm|' \
+            "$PKGROOT/usr/share/applications/uniterm.desktop"
+          desktop-file-validate "$PKGROOT/usr/share/applications/uniterm.desktop"
 
           if [ -f build/appicon.png ]; then
             cp \
