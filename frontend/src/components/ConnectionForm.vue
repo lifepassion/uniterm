@@ -57,9 +57,6 @@
                 <el-radio-button label="sentinel">{{ t('conn.redisModeSentinel') }}</el-radio-button>
               </el-radio-group>
             </el-form-item>
-            <el-form-item v-if="form.type === 'database' && form.dbType === 'redis'" :label="t('conn.redisKeySeparator')">
-              <el-input v-model="form.redisKeySeparator" :placeholder="t('conn.redisKeySeparatorPlaceholder')" style="width: 160px" />
-            </el-form-item>
             <template v-if="isRedisSentinel">
               <el-form-item :label="t('conn.redisSentinels')" required>
                 <el-input v-model="form.redisSentinels" :placeholder="t('conn.redisSentinelsPlaceholder')" />
@@ -404,6 +401,9 @@
             <template v-if="showAdvanced">
             <el-form-item v-if="form.type === 'database'" :label="t('db.params')">
               <el-input v-model="form.dbParams" :placeholder="defaultParamsHint" style="width:100%" />
+            </el-form-item>
+            <el-form-item v-if="form.type === 'database' && form.dbType === 'redis'" :label="t('conn.redisKeySeparator')">
+              <el-input v-model="form.redisKeySeparator" :placeholder="t('conn.redisKeySeparatorPlaceholder')" style="width: 160px" />
             </el-form-item>
             <el-form-item v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'mosh' || form.type === 'local'" :label="t('conn.postLoginScript')">
               <div class="post-login-config">
@@ -935,7 +935,7 @@ const showTunnel = computed(() =>
 )
 const showProxy = computed(() => ['ssh', 'sftp', 'scp', 'monitor'].includes(form.type))
 const showAdvancedToggle = computed(() =>
-  showTunnel.value || form.type === 'ssh' || form.type === 'sftp' || form.type === 'scp' || form.type === 'telnet' || form.type === 'mosh' || form.type === 'local' || form.type === 'serial' || form.type === 'ftp'
+  showTunnel.value || form.type === 'ssh' || form.type === 'sftp' || form.type === 'scp' || form.type === 'telnet' || form.type === 'mosh' || form.type === 'local' || form.type === 'serial' || form.type === 'ftp' || form.type === 'database'
 )
 
 const isRedisSentinel = computed(() =>
