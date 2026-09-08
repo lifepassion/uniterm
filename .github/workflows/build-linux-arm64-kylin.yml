@@ -59,7 +59,10 @@ jobs:
             binutils \
             patchelf \
             desktop-file-utils \
-            python3
+            python3 \
+            python3-gi \
+            xvfb \
+            xauth
 
           echo "===== Architecture ====="
           uname -a
@@ -160,6 +163,14 @@ jobs:
           go mod edit -replace github.com/wailsapp/wails/v3=/tmp/uniterm-kylin-wails
           (cd /tmp/uniterm-kylin-wails/cmd/wails3 && CGO_ENABLED=0 go install .)
           node build/kylin/test-fetch.cjs
+
+      - name: Test request bodies in real WebKit 2.38
+        shell: bash
+        run: |
+          set -euxo pipefail
+          # The disposable CI container runs as root; Kylin users do not need this.
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 LIBGL_ALWAYS_SOFTWARE=1 \
+            xvfb-run -a python3 build/kylin/test-webkit.py
 
       - name: Install frontend dependencies
         shell: bash
