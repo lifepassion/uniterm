@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version name, e.g. v1.9.2-kylin-arm64"
+        description: "Version name"
         required: false
         default: "v1.9.2-kylin-arm64"
         type: string
@@ -26,6 +26,10 @@ jobs:
       GOARCH: arm64
 
     steps:
+
+      # ============================================================
+      # 基础环境
+      # ============================================================
       - name: Install base packages
         shell: bash
         run: |
@@ -50,7 +54,8 @@ jobs:
             pkg-config \
             binutils \
             patchelf \
-            desktop-file-utils
+            desktop-file-utils \
+            python3
 
           echo "===== Architecture ====="
           uname -a
@@ -59,6 +64,9 @@ jobs:
           echo "===== GLIBC ====="
           ldd --version | sed -n '1p'
 
+      # ============================================================
+      # GTK3 + WebKitGTK 4.0
+      # ============================================================
       - name: Install GTK3 WebKitGTK 4.0
         shell: bash
         run: |
@@ -74,7 +82,8 @@ jobs:
           pkg-config --modversion gtk+-3.0
 
           echo "===== WebKitGTK ====="
-          pkg-config --modversion webkit2gtk-4.0
+          WEBKIT_VERSION="$(pkg-config --modversion webkit2gtk-4.0)"
+          echo "$WEBKIT_VERSION"
 
           echo "===== libsoup ====="
           pkg-config --modversion libsoup-2.4
@@ -83,17 +92,26 @@ jobs:
           pkg-config --exists webkit2gtk-4.0
           pkg-config --exists libsoup-2.4
 
+      # ============================================================
+      # Checkout
+      # ============================================================
       - name: Checkout uniTerm
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # ============================================================
+      # Go
+      # ============================================================
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
           go-version: "1.26.2"
           cache: true
 
+      # ============================================================
+      # Node
+      # ============================================================
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -101,6 +119,9 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
+      # ============================================================
+      # 环境信息
+      # ============================================================
       - name: Show environment
         shell: bash
         run: |
@@ -133,6 +154,9 @@ jobs:
           echo "===== libsoup ====="
           pkg-config --modversion libsoup-2.4
 
+      # ============================================================
+      # Go Modules
+      # ============================================================
       - name: Download Go modules
         shell: bash
         run: |
@@ -140,33 +164,38 @@ jobs:
 
           go mod download
 
-      - name: Patch Wails v3 for WebKitGTK 4.0
+      # ============================================================
+      # Patch Wails v3
+      #
+      # 1. webkit2gtk-4.1 -> webkit2gtk-4.0
+      # 2. libsoup-3.0    -> libsoup-2.4
+      # 3. WebKit 最低版本 2.40 -> 2.36
+      # 4. get_http_body() 降级为 http.NoBody
+      # ============================================================
+      - name: Patch Wails v3 for legacy WebKitGTK 4.0
         shell: bash
         run: |
           set -euxo pipefail
 
           WAILS_DIR="$(go list -m -f '{{.Dir}}' github.com/wailsapp/wails/v3)"
 
-          echo "===== Wails module directory ====="
+          echo "=========================================="
+          echo "Wails directory:"
           echo "$WAILS_DIR"
+          echo "=========================================="
 
           test -n "$WAILS_DIR"
           test -d "$WAILS_DIR"
 
-          echo "===== Wails directory contents ====="
-          ls -la "$WAILS_DIR"
-
           chmod -R u+w "$WAILS_DIR"
 
-          echo "===== Before patch ====="
+          echo "===== Wails files ====="
+          ls -la "$WAILS_DIR"
 
-          grep -R \
-            --include='*.go' \
-            -n \
-            -E 'webkit2gtk-4\.1|libsoup-3\.0' \
-            "$WAILS_DIR" || true
-
-          echo "===== Applying patch ====="
+          # --------------------------------------------------------
+          # 1. Patch pkg-config dependency names
+          # --------------------------------------------------------
+          echo "===== Patch library names ====="
 
           find "$WAILS_DIR" \
             -type f \
@@ -176,7 +205,97 @@ jobs:
                 -e 's/webkit2gtk-4\.1/webkit2gtk-4.0/g' \
                 -e 's/libsoup-3\.0/libsoup-2.4/g'
 
-          echo "===== After patch ====="
+          # --------------------------------------------------------
+          # 2. Patch WebKit GTK3 implementation
+          # --------------------------------------------------------
+          WEBKIT_FILE="$WAILS_DIR/internal/assetserver/webview/webkit_linux_gtk3.go"
+
+          echo "===== Target WebKit file ====="
+          echo "$WEBKIT_FILE"
+
+          test -f "$WEBKIT_FILE"
+
+          cp "$WEBKIT_FILE" "${WEBKIT_FILE}.original"
+
+          # --------------------------------------------------------
+          # 使用 Python 精确修改函数，而不是危险的多行 sed
+          # --------------------------------------------------------
+          python3 - "$WEBKIT_FILE" <<'PY'
+          import sys
+          import re
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          text = path.read_text()
+
+          # --------------------------------------------------------
+          # WebKit2MinMinorVersion:
+          #
+          # Wails v3 GTK3 默认 = 40
+          # 老 WebKit 兼容路径降到 36
+          # --------------------------------------------------------
+          text, n = re.subn(
+              r'const Webkit2MinMinorVersion\s*=\s*40',
+              'const Webkit2MinMinorVersion = 36',
+              text,
+              count=1
+          )
+
+          if n != 1:
+              print("WARNING: Webkit2MinMinorVersion=40 not found or already patched")
+
+          # --------------------------------------------------------
+          # 老 WebKitGTK 没有:
+          #
+          # webkit_uri_scheme_request_get_http_body()
+          #
+          # 将整个 Go wrapper 改成 http.NoBody
+          # --------------------------------------------------------
+          pattern = re.compile(
+              r'''func webkit_uri_scheme_request_get_http_body\(req \*C\.WebKitURISchemeRequest\) io\.ReadCloser \{.*?\n\}''',
+              re.S
+          )
+
+          replacement = '''func webkit_uri_scheme_request_get_http_body(_ *C.WebKitURISchemeRequest) io.ReadCloser {
+              // Kylin / legacy WebKitGTK compatibility:
+              // webkit_uri_scheme_request_get_http_body() was introduced in
+              // WebKitGTK 2.40 and is unavailable on older WebKitGTK 4.0.
+              //
+              // uniTerm primarily communicates through Wails bindings, so for
+              // old WebKit versions we safely expose an empty request body.
+              return http.NoBody
+          }'''
+
+          text, n = pattern.subn(replacement, text, count=1)
+
+          if n != 1:
+              print("ERROR: Unable to patch webkit_uri_scheme_request_get_http_body()")
+              sys.exit(1)
+
+          path.write_text(text)
+
+          print("Patched:", path)
+          PY
+
+          # --------------------------------------------------------
+          # 3. 验证 body API 已完全去掉
+          # --------------------------------------------------------
+          echo "===== Verify get_http_body removal ====="
+
+          if grep -R \
+            --include='*.go' \
+            -n \
+            'C\.webkit_uri_scheme_request_get_http_body' \
+            "$WAILS_DIR"; then
+
+            echo "ERROR: old get_http_body C call still exists."
+            exit 1
+          fi
+
+          # --------------------------------------------------------
+          # 4. 验证没有 4.1 / soup3
+          # --------------------------------------------------------
+          echo "===== Verify old dependencies ====="
 
           REMAINING="$(
             grep -R \
@@ -188,30 +307,41 @@ jobs:
 
           if [ -n "$REMAINING" ]; then
             echo "$REMAINING"
-            echo "ERROR: WebKitGTK 4.1 or libsoup 3 references still remain."
+            echo "ERROR: WebKitGTK 4.1 / libsoup 3 references remain."
             exit 1
           fi
 
-          echo "===== WebKitGTK 4.0 references ====="
+          # --------------------------------------------------------
+          # 显示修改后的关键代码
+          # --------------------------------------------------------
+          echo "===== Patched WebKit dependency references ====="
 
           grep -R \
             --include='*.go' \
             -n \
-            'webkit2gtk-4.0' \
+            -E 'webkit2gtk-4\.0|libsoup-2\.4' \
             "$WAILS_DIR" \
-            | sed -n '1,40p' || true
+            | sed -n '1,50p' || true
 
-          echo "===== libsoup 2.4 references ====="
+          echo "===== Patched body function ====="
 
-          grep -R \
-            --include='*.go' \
-            -n \
-            'libsoup-2.4' \
-            "$WAILS_DIR" \
-            | sed -n '1,40p' || true
+          grep -n -A15 -B3 \
+            'func webkit_uri_scheme_request_get_http_body' \
+            "$WEBKIT_FILE" || true
 
-          echo "Wails WebKitGTK 4.0 patch completed successfully."
+          echo "===== Min WebKit version ====="
 
+          grep -n \
+            'Webkit2MinMinorVersion' \
+            "$WEBKIT_FILE"
+
+          echo "=========================================="
+          echo "Wails legacy WebKit patch completed"
+          echo "=========================================="
+
+      # ============================================================
+      # 安装 patch 后的 Wails3 CLI
+      # ============================================================
       - name: Install patched Wails3 CLI
         shell: bash
         run: |
@@ -238,6 +368,9 @@ jobs:
           echo "===== Wails3 version ====="
           wails3 version || true
 
+      # ============================================================
+      # Frontend
+      # ============================================================
       - name: Install frontend dependencies
         shell: bash
         run: |
@@ -251,6 +384,9 @@ jobs:
             npm install
           fi
 
+      # ============================================================
+      # Build Assets
+      # ============================================================
       - name: Generate build assets
         shell: bash
         run: |
@@ -260,6 +396,9 @@ jobs:
 
           wails3 task common:update:build-assets
 
+      # ============================================================
+      # Build ARM64
+      # ============================================================
       - name: Build uniTerm ARM64
         shell: bash
         run: |
@@ -271,14 +410,18 @@ jobs:
 
           echo "=========================================="
           echo " Building uniTerm"
-          echo " ARCH     : arm64"
-          echo " GTK      : 3"
-          echo " WebKit   : 4.0"
-          echo " libsoup  : 2.4"
-          echo " VERSION  : $VERSION"
+          echo "------------------------------------------"
+          echo " ARCH      : arm64"
+          echo " OS        : linux"
+          echo " GLIBC     : 2.31 baseline"
+          echo " GTK       : 3"
+          echo " WebKit ABI: 4.0"
+          echo " libsoup   : 2.4"
+          echo " VERSION   : $VERSION"
           echo "=========================================="
 
           echo "===== Dependency versions ====="
+
           pkg-config --modversion gtk+-3.0
           pkg-config --modversion webkit2gtk-4.0
           pkg-config --modversion libsoup-2.4
@@ -294,6 +437,9 @@ jobs:
           echo "===== Built binary ====="
           file bin/uniTerm
 
+      # ============================================================
+      # ARM64 / ELF 验证
+      # ============================================================
       - name: Verify ARM64 binary
         shell: bash
         run: |
@@ -302,14 +448,16 @@ jobs:
           echo "===== Binary ====="
           file bin/uniTerm
 
-          echo "===== ELF machine ====="
-          readelf -h bin/uniTerm | grep 'Machine:' || true
+          echo "===== ELF Machine ====="
+          readelf -h bin/uniTerm \
+            | grep 'Machine:' || true
 
           echo "===== Dynamic dependencies ====="
           ldd bin/uniTerm || true
 
-          echo "===== WebKit / Soup / GTK references ====="
-          readelf -d bin/uniTerm \
+          echo "===== GTK/WebKit/Soup ====="
+
+          ldd bin/uniTerm \
             | grep -Ei 'webkit|javascriptcore|soup|gtk' || true
 
           echo "===== GLIBC requirements ====="
@@ -329,37 +477,57 @@ jobs:
           echo "Maximum required GLIBC:"
           echo "$MAX_GLIBC"
 
+          # 不允许高于 2.31
           if echo "$MAX_GLIBC" | grep -Eq \
             'GLIBC_(2\.(3[2-9]|[4-9][0-9])|[3-9]\.)'; then
 
-            echo "ERROR: binary requires glibc newer than 2.31"
+            echo "ERROR: Binary requires GLIBC newer than 2.31"
             exit 1
           fi
 
+      # ============================================================
+      # WebKit 验证
+      # ============================================================
       - name: Verify WebKitGTK 4.0 linkage
         shell: bash
         run: |
           set -euxo pipefail
 
-          echo "===== Required shared objects ====="
-          readelf -d bin/uniTerm | grep NEEDED || true
+          echo "===== NEEDED ====="
 
-          if readelf -d bin/uniTerm | grep -q 'webkit2gtk-4.1'; then
-            echo "ERROR: binary still requires WebKitGTK 4.1"
+          readelf -d bin/uniTerm \
+            | grep NEEDED || true
+
+          echo "===== Check WebKit 4.1 ====="
+
+          if readelf -d bin/uniTerm \
+            | grep -q 'webkit2gtk-4.1'; then
+
+            echo "ERROR: binary requires WebKitGTK 4.1"
             exit 1
           fi
 
-          if readelf -d bin/uniTerm | grep -q 'libsoup-3.0'; then
-            echo "ERROR: binary still requires libsoup 3"
+          echo "===== Check libsoup 3 ====="
+
+          if readelf -d bin/uniTerm \
+            | grep -q 'libsoup-3.0'; then
+
+            echo "ERROR: binary requires libsoup 3"
             exit 1
           fi
 
-          echo "OK: WebKitGTK 4.1 not required."
-          echo "OK: libsoup 3 not required."
+          echo "===== Expected dependencies ====="
 
-          echo "===== ldd WebKit result ====="
-          ldd bin/uniTerm | grep -Ei 'webkit|soup|gtk' || true
+          ldd bin/uniTerm \
+            | grep -Ei \
+              'webkit2gtk-4\.0|libsoup-2\.4|libgtk-3' || true
 
+          echo "OK: no WebKitGTK 4.1 dependency"
+          echo "OK: no libsoup 3 dependency"
+
+      # ============================================================
+      # tar.gz
+      # ============================================================
       - name: Create tar.gz package
         shell: bash
         run: |
@@ -368,6 +536,7 @@ jobs:
           VERSION="${{ inputs.version }}"
 
           rm -rf dist/uniterm
+
           mkdir -p dist/uniterm
 
           install -m 755 \
@@ -375,43 +544,40 @@ jobs:
             dist/uniterm/uniterm
 
           cat > dist/uniterm/README-KYLIN.txt <<'EOF'
-          uniTerm ARM64 - Kylin V10 / Ubuntu 20.04 compatible build
+          uniTerm ARM64
+          Kylin V10 / Ubuntu 20.04 compatible build
 
           Architecture:
             ARM64 / aarch64
 
           Build baseline:
             Ubuntu 20.04
-            glibc 2.31
+            GLIBC 2.31
 
-          GUI Runtime:
+          Runtime:
             GTK3
             WebKit2GTK 4.0
             libsoup 2.4
 
-          Recommended runtime packages:
+          Recommended packages:
 
             sudo apt install \
               libgtk-3-0 \
               libwebkit2gtk-4.0-37 \
               libsoup2.4-1
 
-          Test dependencies:
+          Check dependencies:
 
             ldd ./uniterm | grep "not found"
+
+          Check WebKit:
+
+            ldd ./uniterm | grep -E "webkit|soup|gtk"
 
           Run:
 
             chmod +x uniterm
             ./uniterm
-
-          Check architecture:
-
-            uname -m
-
-          Expected:
-
-            aarch64
           EOF
 
           cd dist
@@ -423,8 +589,13 @@ jobs:
           cd ..
 
           echo "===== TAR package ====="
-          ls -lh "uniterm-linux-arm64-webkit40-${VERSION}.tar.gz"
 
+          ls -lh \
+            "uniterm-linux-arm64-webkit40-${VERSION}.tar.gz"
+
+      # ============================================================
+      # DEB
+      # ============================================================
       - name: Create DEB package
         shell: bash
         run: |
@@ -452,18 +623,25 @@ jobs:
             bin/uniTerm \
             "$PKGROOT/usr/bin/uniterm"
 
+          # --------------------------------------------------------
+          # Desktop
+          # --------------------------------------------------------
           if [ -f build/linux/uniTerm.desktop ]; then
+
             cp \
               build/linux/uniTerm.desktop \
               "$PKGROOT/usr/share/applications/uniterm.desktop"
 
           elif [ -f build/linux/uniterm.desktop ]; then
+
             cp \
               build/linux/uniterm.desktop \
               "$PKGROOT/usr/share/applications/uniterm.desktop"
 
           else
-            cat > "$PKGROOT/usr/share/applications/uniterm.desktop" <<'EOF'
+
+            cat > \
+              "$PKGROOT/usr/share/applications/uniterm.desktop" <<'EOF'
           [Desktop Entry]
           Name=uniTerm
           Comment=All-in-one terminal
@@ -473,14 +651,23 @@ jobs:
           Type=Application
           Categories=Development;System;TerminalEmulator;
           EOF
+
           fi
 
+          # --------------------------------------------------------
+          # Icon
+          # --------------------------------------------------------
           if [ -f build/appicon.png ]; then
+
             cp \
               build/appicon.png \
               "$PKGROOT/usr/share/icons/hicolor/256x256/apps/uniterm.png"
+
           fi
 
+          # --------------------------------------------------------
+          # control
+          # --------------------------------------------------------
           cat > "$PKGROOT/DEBIAN/control" <<EOF
           Package: uniterm
           Version: ${DEB_VERSION}
@@ -490,12 +677,13 @@ jobs:
           Maintainer: uniTerm ARM64 Kylin Build
           Depends: libgtk-3-0, libwebkit2gtk-4.0-37, libsoup2.4-1
           Homepage: https://github.com/ys-ll/uniterm
-          Description: uniTerm ARM64 build for Kylin V10
-           GTK3 + WebKit2GTK 4.0 compatible build for
-           Kylin V10 and Ubuntu 20.04 based ARM64 systems.
+          Description: uniTerm ARM64 for Kylin V10
+           GTK3 and WebKit2GTK 4.0 compatible build.
+           Built against Ubuntu 20.04 / GLIBC 2.31.
           EOF
 
           echo "===== Debian control ====="
+
           cat "$PKGROOT/DEBIAN/control"
 
           dpkg-deb \
@@ -504,34 +692,53 @@ jobs:
             "$PKGROOT" \
             "uniterm-linux-arm64-webkit40-${VERSION}.deb"
 
-          echo "===== DEB package ====="
+          echo "===== DEB ====="
+
           ls -lh \
             "uniterm-linux-arm64-webkit40-${VERSION}.deb"
 
-          echo "===== DEB metadata ====="
+          echo "===== Metadata ====="
+
           dpkg-deb -I \
             "uniterm-linux-arm64-webkit40-${VERSION}.deb"
 
+      # ============================================================
+      # Final
+      # ============================================================
       - name: Final artifact information
         shell: bash
         run: |
           set -euxo pipefail
 
+          echo
           echo "=========================================="
-          echo " Build completed"
+          echo "          BUILD COMPLETED"
           echo "=========================================="
 
-          ls -lh uniterm-linux-arm64-webkit40-*
+          ls -lh \
+            uniterm-linux-arm64-webkit40-*
 
+          echo
           echo "===== Binary ====="
+
           file bin/uniTerm
 
-          echo "===== Dynamic dependencies ====="
-          ldd bin/uniTerm || true
+          echo
+          echo "===== Dependencies ====="
 
+          ldd bin/uniTerm \
+            | grep -Ei \
+              'webkit|soup|gtk|not found' || true
+
+          echo
           echo "===== SHA256 ====="
-          sha256sum uniterm-linux-arm64-webkit40-*
 
+          sha256sum \
+            uniterm-linux-arm64-webkit40-*
+
+      # ============================================================
+      # Upload
+      # ============================================================
       - name: Upload ARM64 Kylin artifacts
         uses: actions/upload-artifact@v4
         with:
