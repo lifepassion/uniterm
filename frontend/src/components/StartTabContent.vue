@@ -95,6 +95,7 @@
                 <el-icon v-else-if="config.type === 'telnet'"><Terminal :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'mosh'"><Zap :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'local'"><Laptop :size="28" /></el-icon>
+                <el-icon v-else-if="config.type === 'wsl'"><LaptopMinimal :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'serial'"><Cable :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'tcp'"><ArrowLeftRight :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'sftp'"><Folders :size="28" /></el-icon>
@@ -186,6 +187,7 @@
                 <el-icon v-else-if="config.type === 'telnet'"><Terminal :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'mosh'"><Zap :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'local'"><Laptop :size="28" /></el-icon>
+                <el-icon v-else-if="config.type === 'wsl'"><LaptopMinimal :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'serial'"><Cable :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'tcp'"><ArrowLeftRight :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'sftp'"><Folders :size="28" /></el-icon>
@@ -264,6 +266,7 @@
               <el-icon v-else-if="config.type === 'telnet'"><Terminal :size="28" /></el-icon>
               <el-icon v-else-if="config.type === 'mosh'"><Zap :size="28" /></el-icon>
               <el-icon v-else-if="config.type === 'local'"><Laptop :size="28" /></el-icon>
+                <el-icon v-else-if="config.type === 'wsl'"><LaptopMinimal :size="28" /></el-icon>
               <el-icon v-else-if="config.type === 'serial'"><Cable :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'tcp'"><ArrowLeftRight :size="28" /></el-icon>
               <el-icon v-else-if="config.type === 'sftp'"><Folders :size="28" /></el-icon>
@@ -329,10 +332,12 @@
       <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'telnet'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnect(contextMenuConfig, $event)">{{ t('sidebar.connectTelnet') }}</MenuItem>
       <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'mosh'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnect(contextMenuConfig, $event)">{{ t('sidebar.connectMosh') }}</MenuItem>
       <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'local'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnect(contextMenuConfig, $event)">{{ t('sidebar.connectLocal') }}</MenuItem>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'wsl'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnect(contextMenuConfig, $event)">{{ t('sidebar.connectWsl') }}</MenuItem>
       <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'serial'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectSerial(contextMenuConfig, $event)">{{ t('sidebar.connectSerial') }}</MenuItem>
       <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'tcp'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnect(contextMenuConfig, $event)">{{ t('sidebar.connectTcp') }}</MenuItem>
       <!-- File Transfer -->
       <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'ssh'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectSftp(contextMenuConfig)">{{ t(connectFileMenuKey(contextMenuConfig)) }}</MenuItem>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'wsl'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectWslFile(contextMenuConfig)">{{ t('sidebar.connectWslFile') }}</MenuItem>
       <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'ftp'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectFtp(contextMenuConfig)">{{ t('sidebar.connectFtp') }}</MenuItem>
       <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'smb'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectSmb(contextMenuConfig)">{{ t('sidebar.connectSmb') }}</MenuItem>
       <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 's3'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectS3(contextMenuConfig)">{{ t('sidebar.connectS3') }}</MenuItem>
@@ -442,7 +447,7 @@ import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
 import MenuSubmenu from './MenuSubmenu.vue'
 import MenuDivider from './MenuDivider.vue'
-import { Filter, Plus, Laptop, Cable, SquareTerminal, Terminal, Database, DatabaseZap, Layers, DatabaseSearch, Monitor, MonitorSmartphone, MonitorCloud, FolderUp, Folders, FileUp, HardDrive, Cloud, Globe, Server, Folder, FolderOpen, Zap, MoreHorizontal, ChevronDown, ShipWheel, Boxes, AppWindow, ArrowLeftRight } from '@lucide/vue'
+import { Filter, Plus, Laptop, LaptopMinimal, Cable, SquareTerminal, Terminal, Database, DatabaseZap, Layers, DatabaseSearch, Monitor, MonitorSmartphone, MonitorCloud, FolderUp, Folders, FileUp, HardDrive, Cloud, Globe, Server, Folder, FolderOpen, Zap, MoreHorizontal, ChevronDown, ShipWheel, Boxes, AppWindow, ArrowLeftRight } from '@lucide/vue'
 
 const props = defineProps<{
   tab: StartTab
@@ -1211,6 +1216,7 @@ onUnmounted(() => {
 function doConnect(config: ConnectionConfig, e: MouseEvent) { closeContextMenu(); emit('connect', config, e.ctrlKey || e.metaKey) }
 function doConnectSerial(config: ConnectionConfig, e: MouseEvent) { closeContextMenu(); emit('connect', config, e.ctrlKey || e.metaKey) }
 function doConnectSftp(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-sftp', { detail: config })) }
+function doConnectWslFile(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-wsl-file', { detail: config })) }
 function doConnectMonitor(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-monitor', { detail: config })) }
 function doConnectRdp(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-rdp', { detail: config })) }
 function doConnectVnc(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-vnc', { detail: config })) }

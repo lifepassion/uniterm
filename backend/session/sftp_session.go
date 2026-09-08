@@ -8,7 +8,6 @@ import (
 	"io"
 	"net"
 	"os"
-	osUser "os/user"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -17,17 +16,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ys-ll/uniterm/backend/utils"
 	"github.com/pkg/sftp"
+	"github.com/ys-ll/uniterm/backend/utils"
 	"golang.org/x/crypto/ssh"
 )
 
 type SFTPSession struct {
 	baseSession
+	localFSOps // Windows-local pane, shared with FTP/SMB/WebDAV/S3/WSL
 	sshClient  *ssh.Client
 	sftpClient *sftp.Client
 	cwd        string
-	localCwd   string
 	mu         sync.RWMutex
 	transfers  map[string]*TransferTask
 	taskSeq    int64
@@ -42,16 +41,15 @@ type SFTPSession struct {
 }
 
 func NewSFTPSession(id string) *SFTPSession {
-	homeDir, _ := os.UserHomeDir()
 	return &SFTPSession{
 		baseSession: baseSession{
 			id:          id,
 			sessionType: "sftp",
 			status:      StatusDisconnected,
 		},
-		cwd:       "/",
-		localCwd:  homeDir,
-		transfers: make(map[string]*TransferTask),
+		localFSOps: newLocalFSOps(),
+		cwd:        "/",
+		transfers:  make(map[string]*TransferTask),
 	}
 }
 
@@ -77,7 +75,7 @@ func (s *SFTPSession) Connect(config ConnectionConfig) error {
 		Auth:            authMethods,
 		Timeout:         30 * time.Second,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Config: sshAlgorithms(),
+		Config:          sshAlgorithms(),
 	}
 
 	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
@@ -259,14 +257,14 @@ func (s *SFTPSession) IsConnected() bool {
 
 // FileItem represents a file entry returned to the frontend.
 type FileItem struct {
-	Name    string `json:"name"`
-	Size    int64  `json:"size"`
-	ModTime string `json:"modTime"`
-	Mode    string `json:"mode"`
-	IsDir   bool   `json:"isDir"`
-	IsHidden bool  `json:"isHidden"`
-	Owner   string `json:"owner"`
-	Group   string `json:"group"`
+	Name     string `json:"name"`
+	Size     int64  `json:"size"`
+	ModTime  string `json:"modTime"`
+	Mode     string `json:"mode"`
+	IsDir    bool   `json:"isDir"`
+	IsHidden bool   `json:"isHidden"`
+	Owner    string `json:"owner"`
+	Group    string `json:"group"`
 }
 
 // FileListResult wraps files + current directory for a list response.
@@ -468,81 +466,6 @@ func (s *SFTPSession) listRemoteUnlocked(dir string) (FileListResult, error) {
 	return FileListResult{Files: files, Dir: dir}, nil
 }
 
-func (s *SFTPSession) ListLocal(dir string) (FileListResult, error) {
-	if dir == "" {
-		dir = s.localCwd
-	} else if !filepath.IsAbs(dir) {
-		dir = filepath.Join(s.localCwd, dir)
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return FileListResult{}, err
-	}
-	files := make([]FileItem, 0, len(entries))
-	for _, e := range entries {
-		fi, _ := e.Info()
-		var size int64
-		var mode os.FileMode
-		var modTime time.Time
-		if fi != nil {
-			size = fi.Size()
-			mode = fi.Mode()
-			modTime = fi.ModTime()
-		}
-		owner := ""
-		// Windows reports the owner as "COMPUTERNAME\user", which is verbose in
-		// the owner column; keep only the user part.
-		if currentUser, err := osUser.Current(); err == nil {
-			if i := strings.LastIndexByte(currentUser.Username, '\\'); i >= 0 {
-				owner = currentUser.Username[i+1:]
-			} else {
-				owner = currentUser.Username
-			}
-		}
-		isDir := e.IsDir()
-		if fi != nil && fi.Mode()&os.ModeSymlink != 0 {
-			if target, err := os.Stat(filepath.Join(dir, e.Name())); err == nil {
-				isDir = target.IsDir()
-			}
-		}
-		isHidden := e.Name() != "" && e.Name()[0] == '.'
-		if !isHidden {
-			isHidden = isPathHidden(filepath.Join(dir, e.Name()))
-		}
-		files = append(files, FileItem{
-			Name:     e.Name(),
-			Size:     size,
-			ModTime:  modTime.Format(time.RFC3339),
-			Mode:     mode.String(),
-			IsDir:    isDir,
-			IsHidden: isHidden,
-			Owner:    owner,
-		})
-	}
-	return FileListResult{Files: files, Dir: dir}, nil
-}
-
-func (s *SFTPSession) ListLocalDrives() ([]FileItem, error) {
-	var drives []FileItem
-	for _, letter := range "ABCDEFGHIJKLMNOPQRSTUVWXYZ" {
-		root := string(letter) + ":\\"
-		fi, err := os.Stat(root)
-		if err != nil {
-			continue
-		}
-		if fi.IsDir() {
-			drives = append(drives, FileItem{
-				Name:    root,
-				Size:    0,
-				ModTime: fi.ModTime().Format(time.RFC3339),
-				Mode:    fi.Mode().String(),
-				IsDir:   true,
-			})
-		}
-	}
-	return drives, nil
-}
-
 func (s *SFTPSession) ChangeRemoteDir(dir string) (FileListResult, error) {
 	if err := s.requireClient(); err != nil {
 		return FileListResult{}, err
@@ -563,25 +486,6 @@ func (s *SFTPSession) ChangeRemoteDir(dir string) (FileListResult, error) {
 	s.cwd = real
 	s.mu.Unlock()
 	return s.ListRemote(real)
-}
-
-func (s *SFTPSession) ChangeLocalDir(dir string) (FileListResult, error) {
-	target := dir
-	if !filepath.IsAbs(dir) {
-		target = filepath.Join(s.localCwd, dir)
-	}
-	fi, err := os.Stat(target)
-	if err != nil {
-		return FileListResult{}, fmt.Errorf("no such directory: %s", target)
-	}
-	if !fi.IsDir() {
-		return FileListResult{}, fmt.Errorf("not a directory: %s", target)
-	}
-	abs, _ := filepath.Abs(target)
-	s.mu.Lock()
-	s.localCwd = abs
-	s.mu.Unlock()
-	return s.ListLocal(abs)
 }
 
 func (s *SFTPSession) MakeDir(dir string) error {
@@ -768,98 +672,6 @@ func (s *SFTPSession) Put(localPath, remotePath string, recursive bool) (string,
 	}
 	s.startTransfer(task)
 	return task.ID, nil
-}
-
-// --- Local file operations ---
-
-func (s *SFTPSession) LocalRemove(p string, recursive bool) error {
-	if !filepath.IsAbs(p) {
-		p = filepath.Join(s.localCwd, p)
-	}
-	if recursive {
-		return os.RemoveAll(p)
-	}
-	fi, err := os.Stat(p)
-	if err != nil {
-		return err
-	}
-	if fi.IsDir() {
-		entries, err := os.ReadDir(p)
-		if err != nil {
-			return err
-		}
-		if len(entries) > 0 {
-			return fmt.Errorf("directory not empty (%d items)", len(entries))
-		}
-	}
-	return os.Remove(p)
-}
-
-func (s *SFTPSession) LocalRename(oldName, newName string) error {
-	old := oldName
-	if !filepath.IsAbs(old) {
-		old = filepath.Join(s.localCwd, old)
-	}
-	newPath := newName
-	if !filepath.IsAbs(newPath) {
-		newPath = filepath.Join(s.localCwd, newPath)
-	}
-	return os.Rename(old, newPath)
-}
-
-func (s *SFTPSession) LocalMkdir(dir string) error {
-	p := dir
-	if !filepath.IsAbs(p) {
-		p = filepath.Join(s.localCwd, p)
-	}
-	return os.MkdirAll(p, 0755)
-}
-
-// LocalGetContent reads a local file's full content.
-func (s *SFTPSession) LocalGetContent(localPath string) ([]byte, error) {
-	p := localPath
-	if !filepath.IsAbs(p) {
-		p = filepath.Join(s.localCwd, p)
-	}
-	return os.ReadFile(p)
-}
-
-// LocalPutContent writes content to a local file, creating parent directories as needed.
-func (s *SFTPSession) LocalPutContent(localPath string, content []byte) error {
-	p := localPath
-	if !filepath.IsAbs(p) {
-		p = filepath.Join(s.localCwd, p)
-	}
-	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
-		return err
-	}
-	return os.WriteFile(p, content, 0644)
-}
-
-// LocalCopy copies a local file or directory.
-func (s *SFTPSession) LocalCopy(oldPath, newPath string) error {
-	old := oldPath
-	if !filepath.IsAbs(old) {
-		old = filepath.Join(s.localCwd, old)
-	}
-	n := newPath
-	if !filepath.IsAbs(n) {
-		n = filepath.Join(s.localCwd, n)
-	}
-	return localCopyRecursive(old, n)
-}
-
-// LocalMove moves a local file or directory (rename, same filesystem only).
-func (s *SFTPSession) LocalMove(oldPath, newPath string) error {
-	old := oldPath
-	if !filepath.IsAbs(old) {
-		old = filepath.Join(s.localCwd, old)
-	}
-	n := newPath
-	if !filepath.IsAbs(n) {
-		n = filepath.Join(s.localCwd, n)
-	}
-	return os.Rename(old, n)
 }
 
 // PutContent writes raw content directly to a remote file via SFTP.
@@ -1095,11 +907,11 @@ func (s *SFTPSession) ResumeTransfer(taskID string) error {
 	}
 	task.paused = false
 	task.Status = "running"
-		close(task.pauseCh)
-		task.pauseCh = make(chan struct{})
-		s.emitTransferStart(task)
-		return nil
-	}
+	close(task.pauseCh)
+	task.pauseCh = make(chan struct{})
+	s.emitTransferStart(task)
+	return nil
+}
 
 // --- Recursive helpers ---
 
@@ -1224,7 +1036,7 @@ func (s *SFTPSession) startTransfer(task *TransferTask) {
 		if s.sem != nil {
 			select {
 			case s.sem <- struct{}{}:
-			defer func() { <-s.sem }()
+				defer func() { <-s.sem }()
 			case <-task.ctx.Done():
 				task.Status = "cancelled"
 				s.emitTransferComplete(task)

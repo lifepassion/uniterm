@@ -736,6 +736,8 @@
   "sidebar.connectTelnet": "Connecter en Telnet",
   "sidebar.connectMosh": "Connecter en Mosh",
   "sidebar.connectLocal": "Connecter en local",
+  "sidebar.connectWsl": "Connecter WSL",
+  "sidebar.connectWslFile": "Gestionnaire de fichiers WSL",
   "serial.title": "Serial",
   "serial.portLabel": "Port",
   "serial.baudRate": "Débit",

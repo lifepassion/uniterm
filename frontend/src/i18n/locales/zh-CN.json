@@ -738,6 +738,8 @@
   "sidebar.connectTelnet": "连接 Telnet",
   "sidebar.connectMosh": "连接 Mosh",
   "sidebar.connectLocal": "连接本地",
+  "sidebar.connectWsl": "连接 WSL",
+  "sidebar.connectWslFile": "WSL 文件管理",
   "serial.title": "串口",
   "serial.portLabel": "端口",
   "serial.baudRate": "波特率",

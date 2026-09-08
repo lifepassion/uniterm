@@ -61,7 +61,27 @@ export const useCompanionStore = defineStore('companion', () => {
     return pid
   }
 
+  function getActiveWslPanelId(): string | null {
+    const pid = tabStore.getActivePanelId()
+    if (!pid) return null
+    const panel = panelStore.getPanel(pid)
+    if (!panel || panel.type !== 'wsl') return null
+    return pid
+  }
+
+  /** Active panel that owns a file sidebar: an SSH panel or a WSL terminal. */
+  function getActiveFilesPanelId(): string | null {
+    return getActiveSshPanelId() ?? getActiveWslPanelId()
+  }
+
+  function isWslPanel(pid: string | null): boolean {
+    if (!pid) return false
+    return panelStore.getPanel(pid)?.type === 'wsl'
+  }
+
   const activeSshPanelId = computed(() => getActiveSshPanelId())
+
+  const activeFilesPanelId = computed(() => getActiveFilesPanelId())
 
   const sshConnected = computed(() => {
     const pid = activeSshPanelId.value
@@ -71,10 +91,19 @@ export const useCompanionStore = defineStore('companion', () => {
     return sessionStore.getStatus(panel.sessionId) === 'connected'
   })
 
-  const canToggle = computed(() => sshConnected.value)
+  // File sidebar is available for a connected SSH panel or a running WSL terminal.
+  const filesConnected = computed(() => {
+    const pid = activeFilesPanelId.value
+    if (!pid) return false
+    const panel = panelStore.getPanel(pid)
+    if (!panel?.sessionId) return false
+    return sessionStore.getStatus(panel.sessionId) === 'connected'
+  })
+
+  const canToggle = computed(() => filesConnected.value)
 
   const currentSftpSessionId = computed(() => {
-    const pid = activeSshPanelId.value
+    const pid = activeFilesPanelId.value
     if (!pid) return null
     return entries.value[pid]?.sftpSessionId ?? null
   })
@@ -86,7 +115,7 @@ export const useCompanionStore = defineStore('companion', () => {
   })
 
   const transferKey = computed(() => {
-    const pid = activeSshPanelId.value
+    const pid = activeFilesPanelId.value
     return pid ? `${pid}__sftp` : ''
   })
 
@@ -155,6 +184,18 @@ export const useCompanionStore = defineStore('companion', () => {
     }
     entry.creatingSftp = true
     try {
+      // WSL terminals have no SFTP subsystem — their file sidebar is served by
+      // the WSL file session over \\wsl.localhost\<distro>.
+      if (isWslPanel(sshPanelId)) {
+        config.type = 'wsl-file'
+        const info = await CreateSession('wsl-file', config)
+        entries.value = {
+          ...entries.value,
+          [sshPanelId]: { ...entries.value[sshPanelId], sftpSessionId: info.id, creatingSftp: false },
+        }
+        sessionStore.initSession(info.id)
+        return info.id
+      }
       // Honor the connection's file-transfer protocol preference: 'scp' for
       // hosts without an SFTP subsystem, 'sftp' (default) otherwise.
       const proto = fileTransferProto(config)
@@ -221,7 +262,7 @@ export const useCompanionStore = defineStore('companion', () => {
       filesVisible.value = false
       return
     }
-    const pid = getActiveSshPanelId()
+    const pid = getActiveFilesPanelId()
     if (!pid) return
     filesVisible.value = true
     await ensureSftp(pid)
@@ -295,7 +336,9 @@ export const useCompanionStore = defineStore('companion', () => {
     monitorWidth,
     entries,
     activeSshPanelId,
+    activeFilesPanelId,
     sshConnected,
+    filesConnected,
     canToggle,
     currentSftpSessionId,
     currentMonitorSessionId,
@@ -309,6 +352,8 @@ export const useCompanionStore = defineStore('companion', () => {
     setFilesWidth,
     setMonitorWidth,
     getActiveSshPanelId,
+    getActiveFilesPanelId,
+    isWslPanel,
     getFileViewCache,
     setFileViewCache,
     getMonitorViewCache,

@@ -45,14 +45,14 @@ type ConnectionConfig struct {
 	// credentials at connect time.
 	IdentityId string `json:"identityId,omitempty"`
 	// Password is stored in plaintext JSON. Will be migrated to OS keychain in a future iteration.
-	Password string  `json:"password,omitempty"`
-	KeyPath  string  `json:"keyPath,omitempty"`
+	Password string `json:"password,omitempty"`
+	KeyPath  string `json:"keyPath,omitempty"`
 	// KeyContent holds the inline private-key text (PEM) for authType "keyText".
 	// When set, the connection authenticates from the text directly instead of
 	// reading KeyPath from disk. Encrypted at rest and normalized across cloud
 	// sync exactly like passwords so it stays portable across devices (#720).
-	KeyContent string `json:"keyContent,omitempty"`
-	GroupId  *string `json:"groupId,omitempty"`
+	KeyContent string  `json:"keyContent,omitempty"`
+	GroupId    *string `json:"groupId,omitempty"`
 	// RDP-specific fields
 	RdpFixedWidth  int  `json:"rdpFixedWidth,omitempty"`
 	RdpFixedHeight int  `json:"rdpFixedHeight,omitempty"`
@@ -82,7 +82,7 @@ type ConnectionConfig struct {
 	DBName   string `json:"dbName,omitempty"`   // default database name
 	DBParams string `json:"dbParams,omitempty"` // extra DSN query parameters, e.g. "sslmode=require&connect_timeout=30"
 	// Elasticsearch / OpenSearch fields
-	EsUseSSL     bool   `json:"esUseSsl,omitempty"`   // use HTTPS
+	EsUseSSL     bool   `json:"esUseSsl,omitempty"`     // use HTTPS
 	EsPathPrefix string `json:"esPathPrefix,omitempty"` // optional path prefix, e.g. "/es"
 	EsSkipVerify bool   `json:"esSkipVerify,omitempty"` // insecureSkipVerify for self-signed certs
 	// Redis Sentinel fields (only used when RedisMode == "sentinel")

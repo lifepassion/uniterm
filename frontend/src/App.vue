@@ -12,7 +12,7 @@
       @tab-dragstart="onTabDragStart"
     />
     <div class="main-content">
-      <Sidebar ref="sidebarRef" :visible="sidebarVisible" @toggle="sidebarVisible = !sidebarVisible" @connect="onConnect" @connect-only="onConnectOnly" @connect-serial="showSerialDialog = true" @connect-sftp="(c: any) => { const p = tabStore.activeTab; onConnectSftp(c, p?.type === 'start' ? p : undefined) }" @connect-ftp="(c: any) => { const p = tabStore.activeTab; onConnectFtp(c, p?.type === 'start' ? p : undefined) }" @connect-smb="(c: any) => { const p = tabStore.activeTab; onConnectSmb(c, p?.type === 'start' ? p : undefined) }" @connect-webdav="(c: any) => { const p = tabStore.activeTab; onConnectWebdav(c, p?.type === 'start' ? p : undefined) }" @connect-s3="(c: any) => { const p = tabStore.activeTab; onConnectS3(c, p?.type === 'start' ? p : undefined) }" @connect-rdp="(c: any) => { const p = tabStore.activeTab; onConnectRDP(c, p?.type === 'start' ? p : undefined) }" @connect-vnc="(c: any) => { const p = tabStore.activeTab; onConnectVNC(c, p?.type === 'start' ? p : undefined) }" @connect-spice="(c: any) => { const p = tabStore.activeTab; onConnectSPICE(c, p?.type === 'start' ? p : undefined) }" @connect-x11-desktop="(c: any) => { const p = tabStore.activeTab; onConnectX11Desktop(c, p?.type === 'start' ? p : undefined) }" @connect-d-b="(c: any) => { const p = tabStore.activeTab; onConnectDB(c, p?.type === 'start' ? p : undefined) }" @connect-monitor="(c: any) => { const p = tabStore.activeTab; onConnectMonitor(c, p?.type === 'start' ? p : undefined) }" @connect-k8s="(c: any) => { const p = tabStore.activeTab; onConnectK8s(c, p?.type === 'start' ? p : undefined) }" />
+      <Sidebar ref="sidebarRef" :visible="sidebarVisible" @toggle="sidebarVisible = !sidebarVisible" @connect="onConnect" @connect-only="onConnectOnly" @connect-serial="showSerialDialog = true" @connect-sftp="(c: any) => { const p = tabStore.activeTab; onConnectSftp(c, p?.type === 'start' ? p : undefined) }" @connect-wsl-file="(c: any) => { const p = tabStore.activeTab; onConnectWslFile(c, p?.type === 'start' ? p : undefined) }" @connect-ftp="(c: any) => { const p = tabStore.activeTab; onConnectFtp(c, p?.type === 'start' ? p : undefined) }" @connect-smb="(c: any) => { const p = tabStore.activeTab; onConnectSmb(c, p?.type === 'start' ? p : undefined) }" @connect-webdav="(c: any) => { const p = tabStore.activeTab; onConnectWebdav(c, p?.type === 'start' ? p : undefined) }" @connect-s3="(c: any) => { const p = tabStore.activeTab; onConnectS3(c, p?.type === 'start' ? p : undefined) }" @connect-rdp="(c: any) => { const p = tabStore.activeTab; onConnectRDP(c, p?.type === 'start' ? p : undefined) }" @connect-vnc="(c: any) => { const p = tabStore.activeTab; onConnectVNC(c, p?.type === 'start' ? p : undefined) }" @connect-spice="(c: any) => { const p = tabStore.activeTab; onConnectSPICE(c, p?.type === 'start' ? p : undefined) }" @connect-x11-desktop="(c: any) => { const p = tabStore.activeTab; onConnectX11Desktop(c, p?.type === 'start' ? p : undefined) }" @connect-d-b="(c: any) => { const p = tabStore.activeTab; onConnectDB(c, p?.type === 'start' ? p : undefined) }" @connect-monitor="(c: any) => { const p = tabStore.activeTab; onConnectMonitor(c, p?.type === 'start' ? p : undefined) }" @connect-k8s="(c: any) => { const p = tabStore.activeTab; onConnectK8s(c, p?.type === 'start' ? p : undefined) }" />
       <div class="tab-area">
         <template v-if="activeTab">
           <KeepAlive>
@@ -834,6 +834,9 @@ onMounted(async () => {
   window.addEventListener('app:connect-sftp', ((e: CustomEvent) => {
     const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectSftp(c, prev?.type === 'start' ? prev : undefined) }
   }) as EventListener)
+  window.addEventListener('app:connect-wsl-file', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectWslFile(c, prev?.type === 'start' ? prev : undefined) }
+  }) as EventListener)
   window.addEventListener('app:connect-monitor', ((e: CustomEvent) => {
     const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectMonitor(c, prev?.type === 'start' ? prev : undefined) }
   }) as EventListener)
@@ -1342,7 +1345,7 @@ async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?:
   }
 
   const panel = panelStore.createPanel(config, config.type)
-  const displayTitle = config.name || (config.type === 'local'
+  const displayTitle = config.name || (config.type === 'local' || config.type === 'wsl'
     ? getShellLabel(config.shellPath)
     : config.type === 'serial'
     ? `${config.serialPort || 'Serial'} (${config.serialBaudRate || 115200})`
@@ -1393,7 +1396,20 @@ function getShellLabel(path: string): string {
 }
 
 async function createLocalTerminalWithShell(shellPath: string, keepOpen?: boolean) {
+  // A `wsl://<distro>` shell opens a dedicated WSL terminal (own session type),
+  // everything else stays a normal local terminal.
+  const distro = parseWslFromShell(shellPath)
+  if (distro) return createWslTerminal(distro, keepOpen)
   await createLocalTerminal(shellPath, keepOpen)
+}
+
+/** Parses the distro name from a `wsl://<distro>` shell path, else null. */
+function parseWslFromShell(shellPath?: string): string | null {
+  if (shellPath && shellPath.toLowerCase().startsWith('wsl://')) {
+    const distro = shellPath.slice(6)
+    return distro || null
+  }
+  return null
 }
 
 const pendingGroupId = ref<string | undefined>(undefined)
@@ -1496,6 +1512,57 @@ async function createLocalTerminal(shellPath?: string, keepOpen?: boolean) {
   }
 }
 
+// WSL terminal: a dedicated session type (`wsl`) that launches wsl.exe inside
+// the distro and supports the file sidebar via its companion WSL file session.
+async function createWslTerminal(distro: string, keepOpen?: boolean) {
+  const shellPath = 'wsl://' + distro
+  const panel = panelStore.createPanel(null, 'wsl')
+  const shellName = getShellLabel(shellPath)
+  panelStore.updateTitle(panel.id, shellName)
+
+  try {
+    const stableId = `wsl-terminal:${distro.toLowerCase().replace(/\s+/g, '-')}`
+    const config: ConnectionConfig = {
+      id: stableId,
+      name: shellName,
+      type: 'wsl' as any,
+      host: '',
+      port: 0,
+      user: '',
+      authType: 'password' as any,
+      shellPath,
+      initialCols: 0,
+      initialRows: 0,
+    }
+    panel.config = config
+    connectionStore.add(config)
+    // WSL terminal sessions are temporary — don't record in history
+    const info = await CreateSession('wsl', config)
+    panelStore.bindSession(panel.id, info.id)
+    sessionStore.initSession(info.id)
+    const prev = tabStore.activeTab
+    const tab = prev?.type === 'start' && !keepOpen
+      ? tabStore.replaceStartTab(prev.id, panel.title, panel.id)
+      : tabStore.createTerminalTab(panel.title, panel.id)
+    panelStore.movePanelToTab(panel.id, tab.id)
+
+    const size = await waitForTerminalSize(info.id)
+    if (size.cols > 0 && size.rows > 0) {
+      config.initialCols = size.cols
+      config.initialRows = size.rows
+    }
+    try {
+      await SessionStart(info.id, config)
+    } catch (e) {
+      console.error('Failed to start wsl session:', e)
+      CloseSession(info.id).catch(() => {})
+    }
+  } catch (e) {
+    console.error('Failed to create wsl terminal:', e)
+    panelStore.removePanel(panel.id)
+  }
+}
+
 async function onConnectSftp(config: ConnectionConfig, prevStart?: any) {
   connectionStore.add(config)
 
@@ -1521,6 +1588,29 @@ async function onConnectSftp(config: ConnectionConfig, prevStart?: any) {
     panelStore.bindSession(panel.id, info.id)
   } catch (e) {
     console.error('Failed to create SFTP session:', e)
+    tabStore.closeTab(tab.id)
+    panelStore.removePanel(panel.id)
+  }
+}
+
+// Standalone file tab for a WSL distro opened from the file sidebar. The file
+// browser UI is protocol-agnostic (same two-pane layout as SFTP); the backing
+// session is a wsl-file session over //wsl.localhost that auto-connects on
+// CreateSession, so the tab just lists once it reports connected.
+async function onConnectWslFile(config: ConnectionConfig, prevStart?: any) {
+  const fileConfig: ConnectionConfig = { ...config, type: 'wsl-file' as any }
+  const panel = panelStore.createPanel(fileConfig, 'sftp')
+  const displayTitle = config.name || `WSL ${parseWslFromShell(config.shellPath) || ''}`
+  panelStore.updateTitle(panel.id, displayTitle)
+  const reposition = prevStart ? closeStartAndReposition(prevStart) : null
+  const tab = tabStore.createSFPTab(displayTitle, panel.id)
+  if (reposition) reposition(tab.id)
+  panelStore.movePanelToTab(panel.id, tab.id)
+  try {
+    const info = await CreateSession('wsl-file', fileConfig)
+    panelStore.bindSession(panel.id, info.id)
+  } catch (e) {
+    console.error('Failed to create WSL file session:', e)
     tabStore.closeTab(tab.id)
     panelStore.removePanel(panel.id)
   }

@@ -194,7 +194,7 @@ function scheduleRefresh(delay = 250) {
 }
 
 async function ensureConnected() {
-  const pid = companionStore.activeSshPanelId
+  const pid = companionStore.activeFilesPanelId
   if (!pid || !companionStore.filesVisible) return
   connecting.value = true
   connectError.value = ''
@@ -249,12 +249,15 @@ function onDropUpload(e: DragEvent) {
   // absolute path. Nothing to do on the HTML5 side.
 }
 
-// Open the current companion's SFTP as a standalone tab, mirroring the SSH
-// tab's context-menu action (which reconnects via app:connect-sftp).
+// Open the current companion's file view as a standalone tab. SSH panels open
+// an SFTP tab (mirroring the SSH tab's context-menu action); WSL panels open a
+// wsl-file tab over the distro.
 function openStandaloneSftp() {
-  const panel = panelStore.getPanel(companionStore.activeSshPanelId)
+  const pid = companionStore.activeFilesPanelId
+  const panel = pid ? panelStore.getPanel(pid) : null
   if (!panel) return
-  window.dispatchEvent(new CustomEvent('app:connect-sftp', { detail: panel }))
+  const ev = companionStore.isWslPanel(pid) ? 'app:connect-wsl-file' : 'app:connect-sftp'
+  window.dispatchEvent(new CustomEvent(ev, { detail: panel }))
 }
 
 // ── Change-permission dialog (shared FileChmodDialog) ──
@@ -337,7 +340,7 @@ function bindListeners() {
 
 /** Restore this panel's cached listing; returns true if a non-empty cache existed. */
 function restoreCache(): boolean {
-  const pid = companionStore.activeSshPanelId
+  const pid = companionStore.activeFilesPanelId
   const cached = pid ? companionStore.getFileViewCache(pid) : null
   if (!cached || !cached.files.length) return false
   cwd.value = cached.cwd
@@ -366,9 +369,9 @@ watch(sessionId, async (sid) => {
   }
 })
 
-// Persist the current listing per SSH panel so a later switch-back can restore it.
+// Persist the current listing per files panel so a later switch-back can restore it.
 watch([files, cwd], () => {
-  const pid = companionStore.activeSshPanelId
+  const pid = companionStore.activeFilesPanelId
   if (!pid) return
   companionStore.setFileViewCache(pid, { cwd: cwd.value, files: files.value })
 })
@@ -382,7 +385,7 @@ watch(() => companionStore.filesVisible, (v) => {
   }
 })
 
-watch(() => companionStore.activeSshPanelId, () => {
+watch(() => companionStore.activeFilesPanelId, () => {
   if (companionStore.filesVisible) ensureConnected()
 })
 

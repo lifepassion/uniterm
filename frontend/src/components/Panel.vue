@@ -30,7 +30,7 @@
       </div>
       <div class="panel-header-actions">
         <button
-          v-if="(panel.type === 'ssh' || panel.type === 'local') && workspaceId"
+          v-if="(panel.type === 'ssh' || panel.type === 'local' || panel.type === 'wsl') && workspaceId"
           class="panel-broadcast"
           :class="{ active: panelBroadcastActive }"
           @click.stop="onBroadcastClick"
@@ -87,7 +87,7 @@
     </div>
     <BaseTerminal
       ref="baseTerminalRef"
-      :mode="panel.type === 'local' ? 'local' : 'ssh'"
+      :mode="panel.type === 'local' || panel.type === 'wsl' ? 'local' : 'ssh'"
       :session-id="panel.sessionId"
       :on-session-status="onSessionStatus"
       :broadcast-active="panelBroadcastActive"
@@ -99,7 +99,7 @@
 
 <script setup lang="ts">
 import { ref, watch, computed, nextTick, onMounted, onUnmounted, inject } from 'vue'
-import { Radio, Sparkles, MoreHorizontal, X, SquareTerminal, Laptop, Cable, Terminal, Zap } from '@lucide/vue'
+import { Radio, Sparkles, MoreHorizontal, X, SquareTerminal, Laptop, LaptopMinimal, Cable, Terminal, Zap } from '@lucide/vue'
 import BaseTerminal from './BaseTerminal.vue'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
@@ -212,6 +212,7 @@ const outputLogPath = ref('')
 const panelIcon = computed(() => {
   const t = props.panel.type
   if (t === 'local') return Laptop
+  if (t === 'wsl') return LaptopMinimal
   if (t === 'serial') return Cable
   if (t === 'telnet') return Terminal
   if (t === 'mosh') return Zap

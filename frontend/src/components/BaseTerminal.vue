@@ -522,7 +522,7 @@ async function applySuggestion(item: ReturnType<typeof suggestions.getSelectedIt
       const targets = tabStore.getAllBroadcastPanelIds()
       for (const pid of targets) {
         const p = panelStore.getPanel(pid)
-        if (p?.sessionId && (p.type === 'ssh' || p.type === 'local')) {
+        if (p?.sessionId && (p.type === 'ssh' || p.type === 'local' || p.type === 'wsl')) {
           SessionWrite(p.sessionId, '\x15')
           SessionWrite(p.sessionId, item.value)
         }
@@ -752,7 +752,7 @@ function writeTerminalInput(data: string, inAlternateScreen: boolean) {
     if (targets.length > 0) {
       for (const pid of targets) {
         const p = panelStore.getPanel(pid)
-        if (p?.sessionId && (p.type === 'ssh' || p.type === 'local')) {
+        if (p?.sessionId && (p.type === 'ssh' || p.type === 'local' || p.type === 'wsl')) {
           const translated = applyBackspaceKey(
             filtered,
             p.config?.backspaceKey,
@@ -1844,7 +1844,7 @@ async function pasteToSession(text: string) {
         for (const pid of targets) {
           const p = panelStore.getPanel(pid)
           const managed = p?.sessionId ? getManagedTerminal(p.sessionId) : undefined
-          if (p?.sessionId && (p.type === 'ssh' || p.type === 'local') && managed) {
+          if (p?.sessionId && (p.type === 'ssh' || p.type === 'local' || p.type === 'wsl') && managed) {
             // Bracket per target session — each has its own paste mode.
             // Scroll each target's viewport to the bottom too, so broadcast
             // paste behaves like keyboard input everywhere (issue 629).
@@ -1881,7 +1881,7 @@ async function pasteToSession(text: string) {
 const panel = computed(() => (props.panelId ? panelStore.getPanel(props.panelId) : undefined))
 const isSsh = computed(() => panel.value?.type === 'ssh')
 const supportsOutputLog = computed(() =>
-  !!panel.value && ['ssh', 'telnet', 'serial', 'mosh', 'local'].includes(panel.value.type),
+  !!panel.value && ['ssh', 'telnet', 'serial', 'mosh', 'local', 'wsl'].includes(panel.value.type),
 )
 
 const isOutputLogOn = ref(false)

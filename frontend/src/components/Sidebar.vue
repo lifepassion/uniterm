@@ -313,10 +313,12 @@
       <MenuItem v-if="selectedConn && selectedConn.type === 'telnet'" @click="doConnect">{{ t('sidebar.connectTelnet') }}</MenuItem>
       <MenuItem v-if="selectedConn && selectedConn.type === 'mosh'" @click="doConnect">{{ t('sidebar.connectMosh') }}</MenuItem>
       <MenuItem v-if="selectedConn && selectedConn.type === 'local'" @click="doConnect">{{ t('sidebar.connectLocal') }}</MenuItem>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'wsl'" @click="doConnect">{{ t('sidebar.connectWsl') }}</MenuItem>
       <MenuItem v-if="selectedConn && selectedConn.type === 'serial'" @click="emit('connectSerial')">{{ t('sidebar.connectSerial') }}</MenuItem>
       <MenuItem v-if="selectedConn && selectedConn.type === 'tcp'" @click="doConnect">{{ t('sidebar.connectTcp') }}</MenuItem>
       <!-- File Transfer -->
       <MenuItem v-if="selectedConn && selectedConn.type === 'ssh'" @click="doConnectSFTP">{{ t(connectFileMenuKey(selectedConn)) }}</MenuItem>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'wsl'" @click="doConnectWslFile">{{ t('sidebar.connectWslFile') }}</MenuItem>
       <MenuItem v-if="selectedConn && selectedConn.type === 'ftp'" @click="doConnectFTP">{{ t('sidebar.connectFtp') }}</MenuItem>
       <MenuItem v-if="selectedConn && selectedConn.type === 'smb'" @click="doConnectSMB">{{ t('sidebar.connectSmb') }}</MenuItem>
       <MenuItem v-if="selectedConn && selectedConn.type === 's3'" @click="doConnectS3">{{ t('sidebar.connectS3') }}</MenuItem>
@@ -464,7 +466,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, nextTick, provide } from 'vue'
-import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, Folders, FileUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Laptop, Cable, Pencil, MoreHorizontal, FolderTree, ShipWheel, Boxes, AppWindow, ArrowLeftRight, ArrowRightLeft } from '@lucide/vue'
+import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, Folders, FileUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Laptop, LaptopMinimal, Cable, Pencil, MoreHorizontal, FolderTree, ShipWheel, Boxes, AppWindow, ArrowLeftRight, ArrowRightLeft } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { msg } from '../services/message'
 import { useConnectionStore } from '../stores/connectionStore'
@@ -500,7 +502,7 @@ import { useLocalStateStore } from '../stores/localStateStore'
 defineProps<{
   visible: boolean
 }>()
-const emit = defineEmits(['connect', 'connectOnly', 'connectSftp', 'connectFtp', 'connectSmb', 'connectWebdav', 'connectS3', 'connectRdp', 'connectVnc', 'connectSpice', 'connectX11Desktop', 'connectDB', 'connectMonitor', 'connectSerial', 'connectK8s', 'toggle'])
+const emit = defineEmits(['connect', 'connectOnly', 'connectSftp', 'connectWslFile', 'connectFtp', 'connectSmb', 'connectWebdav', 'connectS3', 'connectRdp', 'connectVnc', 'connectSpice', 'connectX11Desktop', 'connectDB', 'connectMonitor', 'connectSerial', 'connectK8s', 'toggle'])
 const connectionStore = useConnectionStore()
 const settingsStore = useSettingsStore()
 const panelStore = usePanelStore()
@@ -531,7 +533,7 @@ function onFilesTabClick() {
   // companion SFTP session. Closing happens via the panel's X button, which
   // clears filesVisible and the watch below falls back to connections.
   companionStore.filesVisible = true
-  const pid = companionStore.getActiveSshPanelId()
+  const pid = companionStore.getActiveFilesPanelId()
   if (pid) companionStore.ensureSftp(pid).catch(() => {})
 }
 function onMonitorTabClick() {
@@ -1332,6 +1334,17 @@ function doConnectSFTP() {
   }
 }
 
+// Open the WSL distro's file manager in a standalone tab (wsl-file session).
+function doConnectWslFile() {
+  const ids = getSelectedConnectionIds()
+  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
+  selectedIds.value = new Set()
+  closeMenu()
+  for (const c of conns) {
+    emit('connectWslFile', c)
+  }
+}
+
 function doConnectFTP() {
   const ids = getSelectedConnectionIds()
   const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
@@ -1850,6 +1863,7 @@ function connIcon(conn: ConnectionConfig) {
     case 'telnet': return Terminal
     case 'mosh': return Zap
     case 'local': return Laptop
+    case 'wsl': return LaptopMinimal
     case 'serial': return Cable
     case 'tcp': return ArrowLeftRight
     case 'sftp': return Folders

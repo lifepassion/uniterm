@@ -237,7 +237,7 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 	} else if sessionType == "x11-desktop" {
 		// x11-desktop uses its own X11DesktopConnect entry point; the
 		// generic Connect goroutine must never call s.Connect() here.
-	} else if sessionType == "ssh" || sessionType == "local" || sessionType == "telnet" || sessionType == "mosh" || sessionType == "serial" {
+	} else if sessionType == "ssh" || sessionType == "local" || sessionType == "wsl" || sessionType == "telnet" || sessionType == "mosh" || sessionType == "serial" {
 		// Terminal session types that mount xterm: defer Connect until
 		// SessionStart is called after the frontend measures real cols/rows.
 		// Without this gap Claude Code draws tables at the 80x24 default
