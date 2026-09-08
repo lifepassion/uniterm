@@ -653,7 +653,7 @@ const availableTerminalPanels = computed(() => {
   for (const tab of tabStore.tabs) {
     if (tab.type === 'terminal' && (tab as any).panelId) {
       const p = panelStore.getPanel((tab as any).panelId)
-      if (p && (p.type === 'ssh' || p.type === 'local') && !seen.has(p.id)) {
+      if (p && (p.type === 'ssh' || p.type === 'local' || p.type === 'wsl') && !seen.has(p.id)) {
         seen.add(p.id)
         result.push({ id: p.id, title: p.title, type: p.type, shellPath: p.config?.shellPath, config: p.config })
       }
@@ -661,7 +661,7 @@ const availableTerminalPanels = computed(() => {
     if (tab.type === 'workspace' && (tab as any).panelIds) {
       for (const pid of (tab as any).panelIds) {
         const p = panelStore.getPanel(pid)
-        if (p && (p.type === 'ssh' || p.type === 'local') && !seen.has(p.id)) {
+        if (p && (p.type === 'ssh' || p.type === 'local' || p.type === 'wsl') && !seen.has(p.id)) {
           seen.add(p.id)
           result.push({ id: p.id, title: p.title, type: p.type, shellPath: p.config?.shellPath, config: p.config })
         }

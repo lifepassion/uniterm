@@ -5,6 +5,7 @@ import (
 	"os"
 	osUser "os/user"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -41,8 +42,15 @@ func (o *localFSOps) ListLocal(dir string) (FileListResult, error) {
 			modTime = fi.ModTime()
 		}
 		owner := ""
+		// Windows reports the owner as "COMPUTERNAME\user", verbose in the
+		// owner column; keep only the user part (same nicing SFTP had before it
+		// was folded into this shared helper).
 		if currentUser, err := osUser.Current(); err == nil {
-			owner = currentUser.Username
+			if i := strings.LastIndexByte(currentUser.Username, '\\'); i >= 0 {
+				owner = currentUser.Username[i+1:]
+			} else {
+				owner = currentUser.Username
+			}
 		}
 		isDir := e.IsDir()
 		if fi != nil && fi.Mode()&os.ModeSymlink != 0 {

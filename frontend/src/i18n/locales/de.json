@@ -738,6 +738,8 @@
   "sidebar.connectTelnet": "Telnet verbinden",
   "sidebar.connectMosh": "Mosh verbinden",
   "sidebar.connectLocal": "Lokal verbinden",
+  "sidebar.connectWsl": "WSL verbinden",
+  "sidebar.connectWslFile": "WSL-Dateimanager",
   "serial.title": "Serial",
   "serial.portLabel": "Port",
   "serial.baudRate": "Baudrate",

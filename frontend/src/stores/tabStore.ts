@@ -80,7 +80,7 @@ export const useTabStore = defineStore('tab', () => {
     } else {
       for (const id of tab.panelIds) {
         const p = panelStore.getPanel(id)
-        if (p && (p.type === 'ssh' || p.type === 'local')) {
+        if (p && (p.type === 'ssh' || p.type === 'local' || p.type === 'wsl')) {
           tabState.broadcastPanelIds.add(id)
         }
       }
@@ -120,7 +120,7 @@ export const useTabStore = defineStore('tab', () => {
     const ids = tab.type === 'workspace' ? tab.panelIds : 'panelId' in tab ? [tab.panelId] : []
     for (const id of ids) {
       const p = panelStore.getPanel(id)
-      if (p && (p.type === 'ssh' || p.type === 'local')) {
+      if (p && (p.type === 'ssh' || p.type === 'local' || p.type === 'wsl')) {
         tabState.broadcastPanelIds.add(id)
       }
     }

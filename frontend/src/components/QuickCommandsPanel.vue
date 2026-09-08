@@ -385,7 +385,7 @@ function getTargetSessionIds(): string[] {
     const ids: string[] = []
     for (const pid of tabStore.getBroadcastPanelIdsInWorkspace(tab.id)) {
       const p = panelStore.getPanel(pid)
-      if (p?.sessionId && (p.type === 'ssh' || p.type === 'local')) {
+      if (p?.sessionId && (p.type === 'ssh' || p.type === 'local' || p.type === 'wsl')) {
         ids.push(p.sessionId)
       }
     }

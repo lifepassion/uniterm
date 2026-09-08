@@ -738,6 +738,8 @@
   "sidebar.connectTelnet": "Conectar Telnet",
   "sidebar.connectMosh": "Conectar Mosh",
   "sidebar.connectLocal": "Conectar local",
+  "sidebar.connectWsl": "Conectar WSL",
+  "sidebar.connectWslFile": "Administrador de archivos WSL",
   "serial.title": "Serial",
   "serial.portLabel": "Puerto",
   "serial.baudRate": "Baudios",

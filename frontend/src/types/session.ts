@@ -17,7 +17,7 @@ export interface ConnectionConfig {
   id: string
   name: string
   remark?: string
-  type: 'ssh' | 'telnet' | 'mosh' | 'rdp' | 'vnc' | 'spice' | 'database' | 'local' | 'sftp' | 'scp' | 'monitor' | 'ftp' | 'serial' | 'smb' | 'webdav' | 's3' | 'tcp' | 'k8s' | 'container' | 'x11-desktop'
+  type: 'ssh' | 'telnet' | 'mosh' | 'rdp' | 'vnc' | 'spice' | 'database' | 'local' | 'wsl' | 'sftp' | 'scp' | 'monitor' | 'ftp' | 'serial' | 'smb' | 'webdav' | 's3' | 'tcp' | 'k8s' | 'container' | 'x11-desktop'
   host: string
   port: number
   user: string
@@ -41,7 +41,7 @@ export interface ConnectionConfig {
   // "DOMAIN\user" prefix in user is used as a fallback.
   rdpDomain?: string
   rdpAdminSession?: boolean
-  // Local terminal shell path
+  // Local terminal shell path (for WSL, `wsl://<distro>` carries the distro)
   shellPath?: string
   // Working directory for local terminal (defaults to user home)
   cwd?: string

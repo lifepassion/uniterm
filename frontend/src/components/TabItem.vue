@@ -133,7 +133,7 @@ import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
 import MenuDivider from './MenuDivider.vue'
 import { Clipboard } from '@wailsio/runtime'
-import { SquareTerminal, Laptop, FolderUp, Folders, FileUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow, ArrowLeftRight, Radio } from '@lucide/vue'
+import { SquareTerminal, Laptop, LaptopMinimal, FolderUp, FolderOpen, Folders, FileUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow, ArrowLeftRight, Radio } from '@lucide/vue'
 
 const props = defineProps<{
   tab: TerminalTab | SettingsTab | SFTPTab | RDPTab | VNCTab | SPICETab | DBTab | MonitorTab | WorkspaceTab
@@ -193,6 +193,7 @@ const tabIcon = computed(() => {
     if (ct === 'smb') return HardDrive
     if (ct === 's3') return Cloud
     if (ct === 'webdav') return Globe
+    if (ct === 'wsl-file') return FolderOpen
     // SSH-based file panels follow the connection's protocol preference.
     if (ct === 'ssh') return fileTransferProto(panel?.config) === 'scp' ? FileUp : Folders
     return FolderUp
@@ -216,6 +217,7 @@ const tabIcon = computed(() => {
     const panel = panelStore.getPanel(t.panelId)
     if (panel?.type === 'k8s-exec' || panel?.type === 'container-exec') return Box
     if (panel?.type === 'local') return Laptop
+    if (panel?.type === 'wsl') return LaptopMinimal
     if (panel?.type === 'serial') return Cable
     if (panel?.type === 'tcp') return ArrowLeftRight
     if (panel?.type === 'telnet') return Terminal
@@ -235,13 +237,14 @@ const isAILocked = computed(() => {
   return tabStore.isPanelAILocked(props.tab.panelId)
 })
 
-// Whether the tab can be a broadcast target / driver. Only ssh/local-backed
-// terminal tabs (broadcast only routes ssh/local sessions) and workspace tabs.
+// Whether the tab can be a broadcast target / driver. ssh/local/wsl terminal
+// tabs (broadcast routes those sessions) and workspace tabs. WSL is a local-run
+// terminal, so it broadcasts like local.
 const canBroadcast = computed(() => {
   if (props.tab.type === 'workspace') return true
   if (props.tab.type === 'terminal') {
     const p = panelStore.getPanel((props.tab as TerminalTab).panelId)
-    return !!p && (p.type === 'ssh' || p.type === 'local')
+    return !!p && (p.type === 'ssh' || p.type === 'local' || p.type === 'wsl')
   }
   return false
 })

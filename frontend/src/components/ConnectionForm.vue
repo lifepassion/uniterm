@@ -65,7 +65,7 @@
                 <el-input v-model="form.redisMasterName" placeholder="mymaster" />
               </el-form-item>
             </template>
-            <el-form-item :label="form.type === 's3' ? 'Endpoint' : form.type === 'webdav' ? 'URL' : t('conn.host')" required v-if="form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container' && !isRedisSentinel">
+            <el-form-item :label="form.type === 's3' ? 'Endpoint' : form.type === 'webdav' ? 'URL' : t('conn.host')" required v-if="form.type !== 'local' && form.type !== 'wsl' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container' && !isRedisSentinel">
               <div class="host-port-row">
                 <el-input ref="hostInputRef" v-model="form.host" class="host-input" :placeholder="form.type === 's3' ? 'e.g. https://s3.amazonaws.com' : form.type === 'webdav' ? 'https://dav.example.com/dav/' : t('conn.hostPlaceholder')" />
                 <template v-if="form.type !== 's3' && form.type !== 'webdav'">
@@ -83,7 +83,7 @@
                 <el-radio-button v-if="isElasticsearch" label="apikey">{{ t('conn.esAuthApiKey') }}</el-radio-button>
               </el-radio-group>
             </el-form-item>
-            <el-form-item v-if="form.authType !== 'identity' && form.type !== 'vnc' && form.type !== 'spice' && !(form.type === 'database' && form.dbType === 'rqlite') && form.type !== 'local' && form.type !== 'serial' && form.type !== 'tcp' && form.type !== 'k8s' && form.type !== 'container' && !isEsApiKey" :label="form.type === 's3' ? 'Access Key' : t('conn.user')">
+            <el-form-item v-if="form.authType !== 'identity' && form.type !== 'vnc' && form.type !== 'spice' && !(form.type === 'database' && form.dbType === 'rqlite') && form.type !== 'local' && form.type !== 'wsl' && form.type !== 'serial' && form.type !== 'tcp' && form.type !== 'k8s' && form.type !== 'container' && !isEsApiKey" :label="form.type === 's3' ? 'Access Key' : t('conn.user')">
               <el-input v-model="form.user" :placeholder="form.type === 's3' ? 'Access Key ID' : t('conn.userPlaceholder')" />
             </el-form-item>
             <el-form-item v-if="form.type === 'rdp' && isWindows && form.authType !== 'identity'" :label="t('conn.rdpDomain')">
@@ -110,7 +110,7 @@
                 </el-select>
               </el-form-item>
             </template>
-            <el-form-item v-if="form.type !== 'local' && form.type !== 'serial' && form.type !== 'tcp' && form.type !== 'k8s' && form.type !== 'container' && form.authType !== 'identity' && ((form.authType === 'password' && form.type !== 'rdp') || (form.type === 'rdp' && !form.rdpEnableNLA) || form.type === 'vnc' || form.type === 'spice' || form.type === 'database' || form.type === 'telnet' || form.type === 'ftp' || form.type === 'smb' || form.type === 'webdav' || form.type === 's3') && !(form.type === 'database' && form.dbType === 'rqlite')" :label="form.type === 's3' ? 'Secret Key' : (isEsApiKey ? t('conn.esApiKey') : t('conn.password'))">
+            <el-form-item v-if="form.type !== 'local' && form.type !== 'wsl' && form.type !== 'serial' && form.type !== 'tcp' && form.type !== 'k8s' && form.type !== 'container' && form.authType !== 'identity' && ((form.authType === 'password' && form.type !== 'rdp') || (form.type === 'rdp' && !form.rdpEnableNLA) || form.type === 'vnc' || form.type === 'spice' || form.type === 'database' || form.type === 'telnet' || form.type === 'ftp' || form.type === 'smb' || form.type === 'webdav' || form.type === 's3') && !(form.type === 'database' && form.dbType === 'rqlite')" :label="form.type === 's3' ? 'Secret Key' : (isEsApiKey ? t('conn.esApiKey') : t('conn.password'))">
               <el-input v-model="form.password" type="password" show-password :key="passwordInputKey" :placeholder="form.type === 's3' ? 'Secret Access Key' : (isEsApiKey ? t('conn.esApiKeyPlaceholder') : '')" />
             </el-form-item>
             <el-form-item v-if="form.type === 'rdp' && isWindows" :label="t('conn.rdpAdminSession')">
@@ -195,10 +195,10 @@
             <el-form-item v-if="form.type === 'database' && form.dbType !== 'elasticsearch' && form.dbType !== 'redis'" :label="t('db.params')">
               <el-input v-model="form.dbParams" :placeholder="defaultParamsHint" style="width:100%" />
             </el-form-item>
-            <el-form-item v-if="form.type === 'local'" :label="t('conn.shell')">
-              <el-select v-model="form.shellPath" filterable>
+            <el-form-item v-if="form.type === 'local' || form.type === 'wsl'" :label="t('conn.shell')">
+              <el-select v-model="form.shellPath" filterable allow-create clearable>
                 <el-option
-                  v-for="sh in shellOptions"
+                  v-for="sh in shellOptionsForType"
                   :key="sh.value"
                   :label="sh.label"
                   :value="sh.value"
@@ -402,10 +402,10 @@
             <el-form-item v-if="form.type === 'database'" :label="t('db.params')">
               <el-input v-model="form.dbParams" :placeholder="defaultParamsHint" style="width:100%" />
             </el-form-item>
-            <el-form-item v-if="form.type === 'database' && form.dbType === 'redis'" :label="t('conn.redisKeySeparator')">
+<el-form-item v-if="form.type === 'database' && form.dbType === 'redis'" :label="t('conn.redisKeySeparator')">
               <el-input v-model="form.redisKeySeparator" :placeholder="t('conn.redisKeySeparatorPlaceholder')" style="width: 160px" />
             </el-form-item>
-            <el-form-item v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'mosh' || form.type === 'local'" :label="t('conn.postLoginScript')">
+            <el-form-item v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'mosh' || form.type === 'local' || form.type === 'wsl'" :label="t('conn.postLoginScript')">
               <div class="post-login-config">
                 <el-radio-group v-model="postLoginMode" size="small">
                   <el-radio-button label="script">{{ t('conn.postLoginModeScript') }}</el-radio-button>
@@ -472,7 +472,7 @@
               </div>
             </el-form-item>
             <el-form-item
-              v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'serial' || form.type === 'mosh' || form.type === 'local' || form.type === 'tcp'"
+              v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'serial' || form.type === 'mosh' || form.type === 'local' || form.type === 'wsl' || form.type === 'tcp'"
               :label="t('conn.encoding')"
             >
               <el-select v-model="form.encoding" placeholder="Unicode (UTF-8)">
@@ -593,7 +593,7 @@
               </el-select>
             </el-form-item>
             <el-form-item
-              v-if="['ssh','telnet','serial','mosh','local','tcp'].includes(form.type)"
+              v-if="['ssh','telnet','serial','mosh','local','wsl','tcp'].includes(form.type)"
               :label="t('conn.logOnConnect')"
             >
               <el-switch v-model="form.logOnConnect" />
@@ -667,7 +667,7 @@ import type { ConnectionConfig, PostLoginExpectStep } from '../types/session'
 import { OpenFileDialog, OpenPrivateKeyFile, GetPlatform, ListSerialPorts, TestConnection } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { ElInput } from 'element-plus'
 import { msg } from '../services/message'
-import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, Eye, EyeOff, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, DatabaseSearch, SquareTerminal, Zap, Laptop, Cable, FolderUp, Folders, FileUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel, AppWindow, ArrowLeftRight, CircleCheck, CircleX } from '@lucide/vue'
+import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, Eye, EyeOff, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, DatabaseSearch, SquareTerminal, Zap, Laptop, LaptopMinimal, Cable, FolderUp, Folders, FileUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel, AppWindow, ArrowLeftRight, CircleCheck, CircleX } from '@lucide/vue'
 import { listContexts } from '../services/k8sClient'
 import SyntaxEditor from './SyntaxEditor.vue'
 import type { K8sContextInfo } from '../types/k8s'
@@ -725,6 +725,7 @@ const allSubTypes = computed((): Record<string, SubTypeInfo[]> => ({
     { type: 'telnet', label: 'Telnet', icon: Terminal },
     { type: 'mosh', label: 'Mosh', icon: Zap },
     { type: 'local', label: t('conn.localTerminal'), icon: Laptop },
+    ...(isWindows.value ? [{ type: 'wsl', label: 'WSL', icon: LaptopMinimal }] : []),
     { type: 'serial', label: t('serial.title'), icon: Cable },
     { type: 'tcp', label: 'TCP', icon: ArrowLeftRight },
   ],
@@ -809,8 +810,24 @@ function getShellLabel(path: string): string {
   return path.split(/[\\/]/).pop() || path
 }
 
-const shellOptions = computed(() =>
-  settingsStore.availableShells.map(sh => ({ label: getShellLabel(sh), value: sh }))
+// Local-shell options exclude WSL entries: the ordinary local terminal type
+// never surfaces `wsl://<distro>` shells (those belong to the wsl type).
+const localShellOptions = computed(() =>
+  settingsStore.availableShells
+    .filter(sh => !sh.toLowerCase().startsWith('wsl://'))
+    .map(sh => ({ label: getShellLabel(sh), value: sh }))
+)
+
+// WSL options reuse the terminal "shell" field: their value is the `wsl://<distro>`
+// shell path (which carries the distro on the backend), not a separate field.
+const wslShellOptions = computed(() =>
+  settingsStore.availableShells
+    .filter(sh => sh.toLowerCase().startsWith('wsl://'))
+    .map(sh => ({ label: getShellLabel(sh), value: sh }))
+)
+
+const shellOptionsForType = computed(() =>
+  form.type === 'wsl' ? wslShellOptions.value : localShellOptions.value
 )
 
 const x11HintKey = computed(() => {
@@ -908,7 +925,7 @@ function onDialogOpened() {
 
 const isEdit = computed(() => !!props.editConfig?.id)
 
-const TERMINAL_TYPES = ['ssh', 'telnet', 'mosh', 'local', 'serial']
+const TERMINAL_TYPES = ['ssh', 'telnet', 'mosh', 'local', 'wsl', 'serial']
 const REMOTE_TYPES = ['rdp', 'vnc', 'spice', 'x11-desktop']
 const FILETRANSFER_TYPES = ['sftp', 'scp', 'ftp', 'ssh', 'smb', 'webdav', 's3']
 
@@ -929,13 +946,13 @@ const sshConnections = computed(() =>
     .sort((a, b) => a.name.localeCompare(b.name))
 )
 
-const TUNNEL_UNSUPPORTED = ['spice', 'mosh', 'local', 'serial', 'container']
+const TUNNEL_UNSUPPORTED = ['spice', 'mosh', 'local', 'wsl', 'serial', 'container']
 const showTunnel = computed(() =>
   !TUNNEL_UNSUPPORTED.includes(form.type)
 )
 const showProxy = computed(() => ['ssh', 'sftp', 'scp', 'monitor'].includes(form.type))
 const showAdvancedToggle = computed(() =>
-  showTunnel.value || form.type === 'ssh' || form.type === 'sftp' || form.type === 'scp' || form.type === 'telnet' || form.type === 'mosh' || form.type === 'local' || form.type === 'serial' || form.type === 'ftp' || form.type === 'database'
+  showTunnel.value || form.type === 'ssh' || form.type === 'sftp' || form.type === 'scp' || form.type === 'telnet' || form.type === 'mosh' || form.type === 'local' || form.type === 'wsl' || form.type === 'serial' || form.type === 'ftp' || form.type === 'database'
 )
 
 const isRedisSentinel = computed(() =>
@@ -1272,17 +1289,14 @@ watch(() => form.type, (newType) => {
   if (REMOTE_TYPES.includes(newType) || newType === 'database') {
     form.authType = 'password'
   }
-  if (newType === 'local' && !form.shellPath && settingsStore.availableShells.length > 0) {
-    form.shellPath = settingsStore.availableShells[0]
+  if (newType === 'local' && !form.shellPath && localShellOptions.value.length > 0) {
+    form.shellPath = localShellOptions.value[0].value
+  }
+  if (newType === 'wsl' && !form.shellPath && wslShellOptions.value.length > 0) {
+    form.shellPath = wslShellOptions.value[0].value
   }
   if (newType === 'serial') {
     scanSerialPorts()
-  }
-})
-
-watch(postLoginMode, (mode) => {
-  if (mode === 'expect' && (!form.postLoginExpectSteps || form.postLoginExpectSteps.length === 0)) {
-    addExpectStep()
   }
 })
 

@@ -738,6 +738,8 @@
   "sidebar.connectTelnet": "Telnet で接続",
   "sidebar.connectMosh": "Mosh で接続",
   "sidebar.connectLocal": "ローカル接続",
+  "sidebar.connectWsl": "WSL に接続",
+  "sidebar.connectWslFile": "WSL ファイル管理",
   "serial.title": "Serial",
   "serial.portLabel": "ポート",
   "serial.baudRate": "ボーレート",
