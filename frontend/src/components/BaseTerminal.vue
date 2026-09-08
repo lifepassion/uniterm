@@ -137,6 +137,7 @@ import { useSessionStore } from '../stores/sessionStore'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useTerminalMenu } from '../composables/useTerminalMenu'
+import { writeClipboard } from '../composables/useClipboardWrite'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
 import MenuDivider from './MenuDivider.vue'
@@ -841,7 +842,7 @@ function handleTerminalKey(e: KeyboardEvent): boolean {
     const sel = terminal?.getSelection()
     if (sel) {
       e.preventDefault()
-      navigator.clipboard.writeText(sel).catch(() => {})
+      writeClipboard(sel)
       return false
     }
     return true
@@ -1189,7 +1190,9 @@ onMounted(() => {
       const text = terminal?.getSelection()
       if (text && text !== lastSelectionText) {
         lastSelectionText = text
-        navigator.clipboard.writeText(text).catch(() => {})
+        // Wails clipboard writer: navigator.clipboard silently fails in
+        // WKWebView when the webview isn't first responder (#827).
+        writeClipboard(text)
       }
     }, 0)
   })
@@ -1447,7 +1450,7 @@ onMounted(() => {
     if (detail?.panelId && detail.panelId !== props.panelId) return
     const sel = terminal?.getSelection()
     if (sel) {
-      navigator.clipboard.writeText(sel).catch(() => {})
+      writeClipboard(sel)
     }
   }
   window.addEventListener('terminal:copy', onTerminalCopy)

@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import type { Ref } from 'vue'
-import { Clipboard } from '@wailsio/runtime'
 import { useSettingsStore } from '../stores/settingsStore'
+import { writeClipboard } from './useClipboardWrite'
 export interface UseTerminalMenuOptions {
   getSelection: () => string
   onPaste: (text: string) => Promise<void> | void
@@ -62,28 +62,6 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
     menuVisible.value = true
     options.openAt?.(e.clientX, e.clientY)
   }
-
-  // Write to the OS clipboard. Wails' ClipboardSetText resolves false (it
-  // does not reject) on focus loss / AppKit glitches, so a false return has
-  // to fall through to the browser API rather than being treated as done.
-  // browserWriter is also the standalone path when Wails is absent (dev
-  // outside the runtime).
-  type ClipboardWriter = (text: string) => Promise<boolean>
-  const browserWriter: ClipboardWriter = async (text) => {
-    try { await navigator.clipboard.writeText(text); return true } catch { return false }
-  }
-  const wailsWriter: ClipboardWriter = async (text) => {
-    let ok = false
-    try {
-      ok = await Clipboard.SetText(text)
-    } catch {
-      ok = false
-    }
-    return ok || browserWriter(text)
-  }
-  const writeClipboard: ClipboardWriter = typeof Clipboard.SetText === 'function'
-    ? wailsWriter
-    : browserWriter
 
   function copySelection() {
     // Trust getSelection() at click time; the contextmenu-captured ref can
