@@ -125,6 +125,8 @@
   "tab.copyHostAddress": "ホストアドレスをコピー",
   "tab.hostCopied": "ホストアドレスをコピーしました：{host}",
   "tab.rename": "名前を変更",
+  "tab.broadcast": "このタブにブロードキャスト",
+  "tab.unbroadcast": "このタブへのブロードキャストをキャンセル",
   "tab.locate": "接続先を探す",
   "tab.closeRight": "右側のタブを閉じる",
   "tab.closeLeft": "左側のタブを閉じる",

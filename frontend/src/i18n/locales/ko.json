@@ -125,6 +125,8 @@
   "tab.copyHostAddress": "호스트 주소 복사",
   "tab.hostCopied": "호스트 주소가 복사되었습니다: {host}",
   "tab.rename": "이름 변경",
+  "tab.broadcast": "이 탭에 브로드캐스트",
+  "tab.unbroadcast": "이 탭으로의 브로드캐스트 취소",
   "tab.locate": "연결 위치 찾기",
   "tab.closeRight": "오른쪽 탭 닫기",
   "tab.closeLeft": "왼쪽 탭 닫기",

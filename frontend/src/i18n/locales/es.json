@@ -125,6 +125,8 @@
   "tab.copyHostAddress": "Copiar dirección del host",
   "tab.hostCopied": "Dirección del host copiada: {host}",
   "tab.rename": "Renombrar",
+  "tab.broadcast": "Retransmitir a esta pestaña",
+  "tab.unbroadcast": "Cancelar retransmisión a esta pestaña",
   "tab.locate": "Localizar conexión",
   "tab.closeRight": "Cerrar pestañas a la derecha",
   "tab.closeLeft": "Cerrar pestañas a la izquierda",

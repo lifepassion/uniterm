@@ -125,6 +125,8 @@
   "tab.copyHostAddress": "複製主機位址",
   "tab.hostCopied": "已複製主機位址：{host}",
   "tab.rename": "重新命名",
+  "tab.broadcast": "廣播到該標籤",
+  "tab.unbroadcast": "取消廣播到該標籤",
   "tab.locate": "定位到連接",
   "tab.closeRight": "關閉右側分頁",
   "tab.closeLeft": "關閉左側分頁",

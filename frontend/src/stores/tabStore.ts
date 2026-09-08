@@ -96,6 +96,50 @@ export const useTabStore = defineStore('tab', () => {
     }
   }
 
+  // Tab-level broadcast target helpers. A tab is a "broadcast target" when any
+  // broadcastable (ssh/local) panel it holds participates in broadcast — a
+  // single panel for terminal tabs, every ssh/local panel for workspace tabs.
+  // These are derived from broadcastPanelIds, so tab icons and the panel
+  // broadcast buttons always stay in sync.
+
+  function isTabBroadcastTarget(tabId: string): boolean {
+    const tab = tabState.tabs.find(t => t.id === tabId)
+    if (!tab) return false
+    if (tab.type === 'workspace') {
+      return tab.panelIds.some(id => tabState.broadcastPanelIds.has(id))
+    }
+    if ('panelId' in tab) return tabState.broadcastPanelIds.has(tab.panelId)
+    return false
+  }
+
+  // Turn on broadcast for every ssh/local panel the tab holds.
+  function enableBroadcastForTab(tabId: string) {
+    const tab = tabState.tabs.find(t => t.id === tabId)
+    if (!tab) return
+    const panelStore = usePanelStore()
+    const ids = tab.type === 'workspace' ? tab.panelIds : 'panelId' in tab ? [tab.panelId] : []
+    for (const id of ids) {
+      const p = panelStore.getPanel(id)
+      if (p && (p.type === 'ssh' || p.type === 'local')) {
+        tabState.broadcastPanelIds.add(id)
+      }
+    }
+  }
+
+  // Turn off broadcast for every panel the tab holds.
+  function disableBroadcastForTab(tabId: string) {
+    const tab = tabState.tabs.find(t => t.id === tabId)
+    if (!tab) return
+    const ids = tab.type === 'workspace' ? tab.panelIds : 'panelId' in tab ? [tab.panelId] : []
+    for (const id of ids) tabState.broadcastPanelIds.delete(id)
+  }
+
+  // Every panel participating in broadcast across all tabs. Cross-tab: the
+  // input router uses this instead of workspace-scoped targets.
+  function getAllBroadcastPanelIds(): string[] {
+    return [...tabState.broadcastPanelIds]
+  }
+
   // ── Create tabs ──
 
   function createTerminalTab(name: string, panelId: string): TerminalTab {
@@ -752,10 +796,14 @@ export const useTabStore = defineStore('tab', () => {
     clearAILockedPanels,
     toggleTabLock,
     broadcastPanelIds,
+    getAllBroadcastPanelIds,
     toggleBroadcast,
     toggleBroadcastPanel,
     isBroadcasting,
     isPanelBroadcasting,
+    isTabBroadcastTarget,
+    enableBroadcastForTab,
+    disableBroadcastForTab,
     getBroadcastPanelIdsInWorkspace,
     markTabNotification,
     clearTabNotification,

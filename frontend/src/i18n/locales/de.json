@@ -125,6 +125,8 @@
   "tab.copyHostAddress": "Hostadresse kopieren",
   "tab.hostCopied": "Hostadresse kopiert: {host}",
   "tab.rename": "Umbenennen",
+  "tab.broadcast": "An diesen Tab übertragen",
+  "tab.unbroadcast": "Übertragung an diesen Tab abbrechen",
   "tab.locate": "Verbindung finden",
   "tab.closeRight": "Tabs rechts schließen",
   "tab.closeLeft": "Tabs links schließen",

@@ -517,8 +517,8 @@ async function applySuggestion(item: ReturnType<typeof suggestions.getSelectedIt
     // Replace entire line with Ctrl+U. Using backspaces only works when the
     // replacement is exactly the currentToken; for multi-token input (e.g.
     // "git che" → "git checkout") backspaces leave the earlier text behind.
-    if (props.broadcastActive && props.workspaceId) {
-      const targets = tabStore.getBroadcastPanelIdsInWorkspace(props.workspaceId)
+    if (props.broadcastActive) {
+      const targets = tabStore.getAllBroadcastPanelIds()
       for (const pid of targets) {
         const p = panelStore.getPanel(pid)
         if (p?.sessionId && (p.type === 'ssh' || p.type === 'local')) {
@@ -746,8 +746,8 @@ function writeTerminalInput(data: string, inAlternateScreen: boolean) {
   // Don't send empty input - avoids extra blank line when pressing Enter with no command
   if (!sid || !filtered) return
 
-  if (props.broadcastActive && props.workspaceId) {
-    const targets = tabStore.getBroadcastPanelIdsInWorkspace(props.workspaceId)
+  if (props.broadcastActive) {
+    const targets = tabStore.getAllBroadcastPanelIds()
     if (targets.length > 0) {
       for (const pid of targets) {
         const p = panelStore.getPanel(pid)
@@ -1835,8 +1835,8 @@ async function pasteToSession(text: string) {
 
     // Broadcast mode: write to every target panel instead of only this
     // session (issue #597 — pasted command must sync like keyboard input).
-    if (props.broadcastActive && props.workspaceId) {
-      const targets = tabStore.getBroadcastPanelIdsInWorkspace(props.workspaceId)
+    if (props.broadcastActive) {
+      const targets = tabStore.getAllBroadcastPanelIds()
       if (targets.length > 0) {
         for (const pid of targets) {
           const p = panelStore.getPanel(pid)
