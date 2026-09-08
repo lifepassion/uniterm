@@ -1,6 +1,11 @@
 name: Build Linux ARM64 Kylin WebKit 4.0
 
 on:
+  push:
+    branches: [main, fix/kylin-arm64-ci]
+    paths:
+      - '.github/workflows/build-linux-arm64-kylin.yml'
+      - 'build/kylin/**'
   workflow_dispatch:
     inputs:
       version:
@@ -15,6 +20,7 @@ permissions:
 jobs:
   build-arm64:
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
 
     container:
       image: ubuntu:20.04
@@ -24,6 +30,7 @@ jobs:
       CGO_ENABLED: "1"
       GOOS: linux
       GOARCH: arm64
+      VERSION: ${{ inputs.version || 'v1.9.2-kylin-arm64' }}
 
     steps:
 
@@ -94,7 +101,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: "1.26.2"
-          cache: true
+          cache: false
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -141,175 +148,18 @@ jobs:
           set -euxo pipefail
           go mod download
 
-      - name: Patch Wails v3 for legacy WebKitGTK 4.0
+      - name: Patch a private Wails copy for WebKit 2.38
         shell: bash
         run: |
           set -euxo pipefail
-
+          test "$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)" = v3.0.0-beta.16
           WAILS_DIR="$(go list -m -f '{{.Dir}}' github.com/wailsapp/wails/v3)"
-
-          echo "===== Wails module directory ====="
-          echo "$WAILS_DIR"
-
-          test -n "$WAILS_DIR"
-          test -d "$WAILS_DIR"
-
-          chmod -R u+w "$WAILS_DIR"
-
-          echo "===== Wails root ====="
-          ls -la "$WAILS_DIR"
-
-          WEBKIT_FILE="$WAILS_DIR/internal/assetserver/webview/webkit_linux_gtk3.go"
-
-          echo "===== GTK3 WebKit target ====="
-          echo "$WEBKIT_FILE"
-
-          test -f "$WEBKIT_FILE"
-
-          cp "$WEBKIT_FILE" "${WEBKIT_FILE}.original"
-
-          echo "===== Before patch: GTK3 dependency refs ====="
-
-          grep -R \
-            --include='*gtk3.go' \
-            -n \
-            -E 'webkit2gtk-4\.1|libsoup-3\.0' \
-            "$WAILS_DIR" || true
-
-          # 只修改 GTK3 文件，避免影响 GTK4 路径
-          find "$WAILS_DIR" \
-            -type f \
-            -name '*gtk3.go' \
-            -print0 \
-            | xargs -0 sed -i \
-                -e 's/webkit2gtk-4\.1/webkit2gtk-4.0/g' \
-                -e 's/libsoup-3\.0/libsoup-2.4/g'
-
-          # 精确修改 GTK3 WebKit 实现
-          python3 - "$WEBKIT_FILE" <<'PY'
-          import sys
-          import re
-          from pathlib import Path
-
-          path = Path(sys.argv[1])
-          text = path.read_text()
-
-          # 最低版本从 2.40 降到 2.36
-          text, n1 = re.subn(
-              r'const Webkit2MinMinorVersion\s*=\s*40',
-              'const Webkit2MinMinorVersion = 36',
-              text,
-              count=1
-          )
-
-          if n1 == 0:
-              print("WARNING: Webkit2MinMinorVersion=40 not found or already patched")
-
-          # 将 get_http_body 包装函数替换为 http.NoBody
-          pattern = re.compile(
-              r'''func webkit_uri_scheme_request_get_http_body\(req \*C\.WebKitURISchemeRequest\) io\.ReadCloser \{.*?\n\}''',
-              re.S
-          )
-
-          replacement = '''func webkit_uri_scheme_request_get_http_body(_ *C.WebKitURISchemeRequest) io.ReadCloser {
-              // Legacy WebKitGTK compatibility.
-              // webkit_uri_scheme_request_get_http_body() is unavailable
-              // on older WebKitGTK 4.0 versions.
-              return http.NoBody
-          }'''
-
-          text, n2 = pattern.subn(replacement, text, count=1)
-
-          if n2 != 1:
-              print("ERROR: failed to patch webkit_uri_scheme_request_get_http_body()")
-              sys.exit(1)
-
-          path.write_text(text)
-
-          print("Patched:", path)
-          PY
-
-          echo "===== Verify GTK3 get_http_body removal ====="
-
-          if grep -n \
-            'C\.webkit_uri_scheme_request_get_http_body' \
-            "$WEBKIT_FILE"; then
-
-            echo "ERROR: GTK3 WebKit file still contains get_http_body C call."
-            exit 1
-          fi
-
-          echo "===== Verify GTK3 dependency refs ====="
-
-          REMAINING="$(
-            grep -R \
-              --include='*gtk3.go' \
-              -n \
-              -E 'webkit2gtk-4\.1|libsoup-3\.0' \
-              "$WAILS_DIR" || true
-          )"
-
-          if [ -n "$REMAINING" ]; then
-            echo "$REMAINING"
-            echo "ERROR: GTK3 files still reference WebKitGTK 4.1 or libsoup 3."
-            exit 1
-          fi
-
-          echo "===== Patched GTK3 dependency refs ====="
-
-          grep -R \
-            --include='*gtk3.go' \
-            -n \
-            -E 'webkit2gtk-4\.0|libsoup-2\.4' \
-            "$WAILS_DIR" \
-            | sed -n '1,60p' || true
-
-          echo "===== Patched body function ====="
-
-          grep -n -A12 -B3 \
-            'func webkit_uri_scheme_request_get_http_body' \
-            "$WEBKIT_FILE" || true
-
-          echo "===== Min WebKit version ====="
-
-          grep -n \
-            'Webkit2MinMinorVersion' \
-            "$WEBKIT_FILE" || true
-
-          echo "===== Confirm non-GTK3 path is ignored ====="
-
-          NON_GTK3_FILE="$WAILS_DIR/internal/assetserver/webview/webkit_linux.go"
-
-          if [ -f "$NON_GTK3_FILE" ]; then
-            sed -n '1,8p' "$NON_GTK3_FILE"
-          fi
-
-          echo "Wails GTK3 legacy WebKit patch completed."
-
-      - name: Install patched Wails3 CLI
-        shell: bash
-        run: |
-          set -euxo pipefail
-
-          WAILS_DIR="$(go list -m -f '{{.Dir}}' github.com/wailsapp/wails/v3)"
-
-          echo "===== Wails directory ====="
-          echo "$WAILS_DIR"
-
-          test -d "$WAILS_DIR/cmd/wails3"
-
-          cd "$WAILS_DIR/cmd/wails3"
-
-          echo "===== Build patched wails3 ====="
-          go install -tags gtk3 .
-
-          export PATH="$(go env GOPATH)/bin:$PATH"
-
-          echo "===== Wails3 binary ====="
-          which wails3
-
-          echo "===== Wails3 version ====="
-          wails3 version || true
+          cp -a "$WAILS_DIR" /tmp/uniterm-kylin-wails
+          chmod -R u+w /tmp/uniterm-kylin-wails
+          python3 build/kylin/patch-wails.py /tmp/uniterm-kylin-wails
+          go mod edit -replace github.com/wailsapp/wails/v3=/tmp/uniterm-kylin-wails
+          (cd /tmp/uniterm-kylin-wails/cmd/wails3 && CGO_ENABLED=0 go install .)
+          node build/kylin/test-fetch.cjs
 
       - name: Install frontend dependencies
         shell: bash
@@ -340,7 +190,7 @@ jobs:
 
           export PATH="$(go env GOPATH)/bin:$PATH"
 
-          VERSION="${{ inputs.version }}"
+          [[ "$VERSION" =~ ^v?[0-9][0-9A-Za-z.+~-]*$ ]]
 
           echo "=========================================="
           echo " Building uniTerm ARM64 Kylin"
@@ -381,7 +231,9 @@ jobs:
             | grep 'Machine:' || true
 
           echo "===== Dynamic dependencies ====="
-          ldd bin/uniTerm || true
+          ldd bin/uniTerm | tee /tmp/uniterm-ldd.txt
+          if grep -q 'not found' /tmp/uniterm-ldd.txt; then exit 1; fi
+          readelf -h bin/uniTerm | grep -q 'AArch64' 
 
           echo "===== GTK/WebKit/Soup dependencies ====="
           ldd bin/uniTerm \
@@ -435,6 +287,13 @@ jobs:
             | grep -Ei \
               'webkit2gtk-4\.0|libsoup-2\.4|libgtk-3' || true
 
+          readelf -d bin/uniTerm > /tmp/uniterm-needed.txt
+          grep -q 'libwebkit2gtk-4.0.so' /tmp/uniterm-needed.txt
+          grep -q 'libgtk-3.so' /tmp/uniterm-needed.txt
+          if objdump -T bin/uniTerm | grep -E 'webkit_uri_scheme_request_get_http_body|webkit_web_view_evaluate_javascript'; then
+            echo 'ERROR: binary still uses newer WebKit APIs'
+            exit 1
+          fi
           echo "OK: no WebKitGTK 4.1 dependency"
           echo "OK: no libsoup 3 dependency"
 
@@ -443,7 +302,7 @@ jobs:
         run: |
           set -euxo pipefail
 
-          VERSION="${{ inputs.version }}"
+          [[ "$VERSION" =~ ^v?[0-9][0-9A-Za-z.+~-]*$ ]]
 
           rm -rf dist/uniterm
           mkdir -p dist/uniterm
@@ -506,7 +365,7 @@ jobs:
         run: |
           set -euxo pipefail
 
-          VERSION="${{ inputs.version }}"
+          [[ "$VERSION" =~ ^v?[0-9][0-9A-Za-z.+~-]*$ ]]
 
           DEB_VERSION="$(
             echo "$VERSION" \
@@ -565,7 +424,7 @@ jobs:
           Priority: optional
           Architecture: arm64
           Maintainer: uniTerm ARM64 Kylin Build
-          Depends: libgtk-3-0, libwebkit2gtk-4.0-37, libsoup2.4-1
+          Depends: libc6 (>= 2.31), libgtk-3-0, libwebkit2gtk-4.0-37 (>= 2.38), libsoup2.4-1
           Homepage: https://github.com/ys-ll/uniterm
           Description: uniTerm ARM64 for Kylin V10
            GTK3 and WebKit2GTK 4.0 compatible build.
