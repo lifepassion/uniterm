@@ -1,0 +1,47 @@
+package main
+
+import (
+    "fmt"
+    "net/http"
+    "os"
+    "sync/atomic"
+    "time"
+    "github.com/wailsapp/wails/v3/pkg/application"
+)
+
+type Probe struct{}
+var passed atomic.Bool
+var app *application.App
+func (*Probe) Echo(value string) string { return value }
+func (*Probe) Finish(ok bool) {
+    passed.Store(ok)
+    go func() { time.Sleep(100 * time.Millisecond); app.Quit() }()
+}
+const page = `<!doctype html><html><body><script type="module">
+import {Call} from '/wails/runtime.js';
+try {
+    for (const text of ['中文终端🙂', 'a'.repeat(600000)]) {
+        const value = await Call.ByName('main.Probe.Echo', text);
+        if (value !== text) throw Error('RPC body mismatch');
+    }
+    await Call.ByName('main.Probe.Finish', true);
+} catch (e) {
+    console.error(e);
+    await Call.ByName('main.Probe.Finish', false);
+}
+</script></body></html>`
+func main() {
+    app = application.New(application.Options{
+        Name: "KylinSmoke",
+        Services: []application.Service{application.NewService(&Probe{})},
+        Assets: application.AssetOptions{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            w.Header().Set("Content-Type", "text/html; charset=utf-8")
+            fmt.Fprint(w, page)
+        })},
+    })
+    app.Window.NewWithOptions(application.WebviewWindowOptions{Title: "Kylin CI smoke test", Width: 640, Height: 480})
+    go func() { time.Sleep(45 * time.Second); app.Quit() }()
+    if err := app.Run(); err != nil { fmt.Println(err); os.Exit(1) }
+    if !passed.Load() { fmt.Println("FAIL: Wails RPC did not round-trip"); os.Exit(1) }
+    fmt.Println("PASS: real Wails RPC, Unicode and chunked 600 KB payload")
+}
