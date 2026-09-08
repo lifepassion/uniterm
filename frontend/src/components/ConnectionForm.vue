@@ -403,7 +403,7 @@
               <el-input v-model="form.dbParams" :placeholder="defaultParamsHint" style="width:100%" />
             </el-form-item>
 <el-form-item v-if="form.type === 'database' && form.dbType === 'redis'" :label="t('conn.redisKeySeparator')">
-              <el-input v-model="form.redisKeySeparator" :placeholder="t('conn.redisKeySeparatorPlaceholder')" style="width: 160px" />
+              <el-input v-model="form.redisKeySeparator" style="width: 160px" />
             </el-form-item>
             <el-form-item v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'mosh' || form.type === 'local' || form.type === 'wsl'" :label="t('conn.postLoginScript')">
               <div class="post-login-config">
@@ -1002,7 +1002,7 @@ const form = reactive<ConnectionConfig>({
   redisMode: 'standalone',
   redisMasterName: '',
   redisSentinels: '',
-  redisKeySeparator: '',
+  redisKeySeparator: ':',
   sentinelUser: '',
   sentinelPassword: '',
   postLoginScript: '',
@@ -1219,6 +1219,8 @@ watch(() => props.editConfig, (config) => {
     form.x11Forwarding = config.x11Forwarding ?? false
     // Existing SSH connections without the field default to SFTP (old behavior).
     form.fileTransferProto = config.fileTransferProto ?? 'sftp'
+    // Redis key separator defaults to ":" (empty from old connections = ":").
+    form.redisKeySeparator = config.redisKeySeparator ?? ':'
     postLoginMode.value = (config.postLoginExpectSteps?.length || 0) > 0 ? 'expect' : 'script'
     selectedGroupId.value = config.groupId || undefined
     // Sync serial refs from config
@@ -1355,7 +1357,7 @@ function resetForm() {
   form.redisMode = 'standalone'
   form.redisMasterName = ''
   form.redisSentinels = ''
-  form.redisKeySeparator = ''
+  form.redisKeySeparator = ':'
   form.sentinelUser = ''
   form.sentinelPassword = ''
   form.postLoginScript = ''

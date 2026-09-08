@@ -11,7 +11,7 @@
           <el-input v-model="scanPattern" size="small" placeholder="*" style="flex: 1; min-width: 80px" @keyup.enter="onScan" />
           <button class="btn btn-ghost btn-icon btn-sm" :title="t('redis.refresh')" @click="onScan" style="flex-shrink: 0"><RefreshCw :size="14" /></button>
           <button class="btn btn-ghost btn-icon btn-sm" :title="treeMode ? t('redis.flatView') : t('redis.treeView')" @click="treeMode = !treeMode" style="flex-shrink: 0">
-            <Folder :size="14" v-if="!treeMode" />
+            <FolderTree :size="14" v-if="!treeMode" />
             <List :size="14" v-else />
           </button>
           <button class="btn btn-ghost btn-icon btn-sm" :title="t('redis.newKey')" @click="onShowNewKeyDialog" style="flex-shrink: 0"><Plus :size="14" /></button>
@@ -21,33 +21,58 @@
         <div class="redis-key-list" v-loading="loading">
           <div v-if="keys.length === 0 && !loading" class="redis-placeholder">{{ t('redis.noKeys') }}</div>
           <template v-else-if="treeMode">
-            <TreeNode
-              v-for="node in keyTree"
-              :key="node.id"
-              :node="node"
-              :depth="0"
-            />
+            <!-- Rows render directly in the template (the DB tree's mode) so
+                 the scoped .db-header/.table-item styles actually reach them.
+                 visibleTreeRows is the tree flattened depth-first to the
+                 folders currently expanded; indentation is a per-depth pad. -->
+            <template v-for="row in visibleTreeRows" :key="row.node.id">
+              <div
+                v-if="row.node.children.length > 0"
+                class="db-header"
+                :style="{ paddingLeft: (8 + row.depth * 18) + 'px' }"
+                @click="onToggleFolder(row.node.id)"
+              >
+                <span class="db-arrow" @click.stop="onToggleFolder(row.node.id)">
+                  <component :is="expandedFolders.has(row.node.id) ? ChevronDown : ChevronRight" :size="12" />
+                </span>
+                <Folder class="db-icon" :size="14" />
+                <span class="db-name">{{ row.node.label }}</span>
+              </div>
+              <div
+                v-else
+                class="table-item"
+                :class="{ selected: selectedKey === row.node.keyName }"
+                :style="{ paddingLeft: (8 + row.depth * 18) + 'px' }"
+                @click="onSelectTreeKey(row.node)"
+              >
+                <span class="table-icon-spacer" />
+                <component :is="typeIcon(row.node.keyType)" class="table-icon" :size="14" />
+                <span class="table-name">{{ row.node.label }}</span>
+              </div>
+            </template>
           </template>
           <template v-else>
             <div
               v-for="keyInfo in keys"
               :key="keyInfo.name"
-              class="key-item"
+              class="table-item"
               :class="{ selected: selectedKey === keyInfo.name }"
               @click="onSelectKey(keyInfo)"
             >
-              <span class="key-type-badge">{{ keyInfo.type }}</span>
-              <span class="key-name">{{ keyInfo.name }}</span>
+              <span class="table-icon-spacer" />
+              <component :is="typeIcon(keyInfo.type)" class="table-icon" :size="14" />
+              <span class="table-name">{{ keyInfo.name }}</span>
             </div>
           </template>
         </div>
 
         <!-- Pagination -->
         <div class="redis-pagination">
+          <span class="result-count">{{ t('redis.scanCount', { n: keys.length }) }}</span>
+          <span style="flex:1"></span>
           <el-select v-model="pageSize" size="small" style="width: 70px" @change="onPageSizeChange">
             <el-option v-for="s in pageSizes" :key="s" :label="String(s)" :value="s" />
           </el-select>
-          <span style="flex:1"></span>
           <button class="page-btn" :disabled="cursorStack.length === 0" @click="onPrevPage"><ChevronLeft :size="14" /></button>
           <span class="page-num">{{ currentPage }}</span>
           <button class="page-btn" :disabled="nextCursor === 0 && !hasMore" @click="onNextPage"><ChevronRight :size="14" /></button>
@@ -280,10 +305,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onUnmounted, h, defineComponent, type PropType } from 'vue'
+import { ref, watch, computed, onUnmounted } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { msg } from '../services/message'
-import { Trash2, Plus, GripVertical, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Folder, List } from '@lucide/vue'
+import { Trash2, Plus, GripVertical, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Folder, FolderTree, List, Type, TableProperties, ListMinus, ListOrdered } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import {
   RedisScanKeys,
@@ -307,15 +332,14 @@ import {
   RedisSwitchDB,
   RedisKeyspaceInfo,
 } from '../../bindings/github.com/ys-ll/uniterm/app'
-import type { RedisKeyInfo, FieldEntry, ScoredMember, ScanResult } from '../types/redis'
+import type { RedisKeyInfo, FieldEntry, ScoredMember, ScanResult, KeyNode } from '../types/redis'
 
 const props = defineProps<{ sessionId: string; keySeparator?: string }>()
 const { t } = useI18n()
 
 // Separator for tree grouping; defaults to ":" when empty — the namespace
-// convention shared by every Redis GUI. Grouping only ever reflects the
-// currently scanned page (SCAN is random-order), so folder counts are lower
-// bounds; the folder badge renders as "N+" to say so.
+// convention shared by every Redis GUI. Grouping only reflects the currently
+// scanned page (SCAN is random-order), so folder contents are a lower bound.
 const separator = computed(() => (props.keySeparator ?? '').length === 1 ? props.keySeparator! : ':')
 const treeMode = ref(true)
 const keyTree = computed(() => treeMode.value ? buildKeyTree(keys.value, separator.value) : [])
@@ -324,15 +348,6 @@ const keyTree = computed(() => treeMode.value ? buildKeyTree(keys.value, separat
 // Nodes are built from the currently scanned page of keys by splitting names
 // on the separator. Folder counts are recursive sums over loaded keys only —
 // the same approximation every Redis GUI makes.
-
-interface KeyNode {
-  id: string          // full path from root, e.g. "app:cache"
-  label: string       // last segment
-  count: number       // leaf keys under this node (recursive)
-  children: KeyNode[] // empty array = leaf key
-  keyName?: string    // leaf only: full redis key
-  keyType?: RedisKeyInfo['type']  // leaf only
-}
 
 function buildKeyTree(keys: RedisKeyInfo[], sep: string): KeyNode[] {
   interface RawNode { children: Map<string, RawNode>; key?: RedisKeyInfo }
@@ -377,8 +392,12 @@ function buildKeyTree(keys: RedisKeyInfo[], sep: string): KeyNode[] {
       })
     }
     return nodes.sort((a, b) => {
-      // folders before keys, then alphabetical — same rule as the other GUIs
-      if (a.children.length !== b.children.length) return a.children.length ? -1 : 1
+      // Folders before keys, then alphabetical within each group. A folder is
+      // "has children", so compare that explicitly — comparing children.length
+      // directly would order two folders by descendant count instead.
+      const af = a.children.length > 0
+      const bf = b.children.length > 0
+      if (af !== bf) return af ? -1 : 1
       return a.label.localeCompare(b.label)
     })
   }
@@ -400,52 +419,41 @@ function onSelectTreeKey(node: KeyNode) {
   }
 }
 
-// Recursive tree node rendered inline (script-setup local component).
-// All rows share the flat list's .key-item rule set — one font, one row
-// height; folders add .folder for the bold label, leaves keep the same
-// 12px arrow column so text aligns with the flat list's badge column.
-const TreeRow = defineComponent({
-  name: 'RedisTreeRow',
-  props: { node: { type: Object as PropType<KeyNode>, required: true }, depth: { type: Number, required: true } },
-  setup(rowProps) {
-    return () => {
-      const n = rowProps.node
-      if (n.children.length === 0) {
-        return h('div', {
-          class: ['key-item', { selected: selectedKey.value === n.keyName }],
-          onClick: () => onSelectTreeKey(n),
-        }, [
-          h('span', { class: 'key-leaf-spacer' }),
-          h('span', { class: 'key-type-badge' }, n.keyType),
-          h('span', { class: 'key-name' }, n.label),
-        ])
+// DB-style rendering: flatten the nested keyTree to the rows now on screen
+// (folders expanded, depth-first), each tagged with its tree depth. The
+// template then v-for's over these rows directly — which is exactly how the
+// DB tree renders — so the scoped row styles reach every row. Indentation is
+// a per-depth left pad on the row itself.
+interface VisibleRow {
+  node: KeyNode
+  depth: number
+}
+const visibleTreeRows = computed<VisibleRow[]>(() => {
+  const rows: VisibleRow[] = []
+  const walk = (nodes: KeyNode[], depth: number) => {
+    for (const n of nodes) {
+      rows.push({ node: n, depth })
+      if (n.children.length > 0 && expandedFolders.value.has(n.id)) {
+        walk(n.children, depth + 1)
       }
-      const expanded = expandedFolders.value.has(n.id)
-      const rows = [
-        h('div', {
-          class: 'db-header',
-          title: t('redis.folderCountHint', { n: n.count }),
-          onClick: () => onToggleFolder(n.id),
-        }, [
-          h('span', { class: 'db-arrow', onClick: (e: MouseEvent) => { e.stopPropagation(); onToggleFolder(n.id) } },
-            [h(expanded ? ChevronDown : ChevronRight, { size: 12 })]),
-          h(Folder, { class: 'db-icon', size: 14 }),
-          h('span', { class: 'db-name' }, n.label),
-          h('span', { class: 'folder-count' }, n.count + '+'),
-        ]),
-      ]
-      if (expanded) {
-        for (const child of n.children) {
-          rows.push(h('div', { class: 'tree-children' }, [
-            h(TreeRow, { node: child, depth: rowProps.depth + 1, key: child.id }),
-          ]))
-        }
-      }
-      return rows
     }
-  },
+  }
+  walk(keyTree.value, 0)
+  return rows
 })
-const TreeNode = TreeRow
+
+// Redis key type → icon, mirroring how the DB tree distinguishes tables/views
+// by icon. Shares the .table-icon slot so tree and flat rows stay identical.
+function typeIcon(type?: RedisKeyInfo['type']) {
+  switch (type) {
+    case 'hash': return TableProperties
+    case 'list': return List
+    case 'set': return ListMinus
+    case 'zset': return ListOrdered
+    case 'string':
+    default: return Type
+  }
+}
 
 // --- Resize ---
 const leftWidth = ref(280)
@@ -817,41 +825,41 @@ watch(() => props.sessionId, async (newId) => {
   flex: 1;
   overflow-y: auto;
 }
-.key-item {
-  padding: 6px 8px;
-  cursor: pointer;
+/* Rows share the DB tree's .table-item/.table-name rule set so key leaves
+   match database tables exactly; folders use the shared .db-header classes.
+   Flat mode (no nesting) is the same leaf row as tree mode. Indentation: the
+   30px spacer (arrow 12 + gap + icon 14 + gap) lines leaf text up with the
+   folder label above. */
+.table-item {
   display: flex;
   align-items: center;
   gap: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s ease;
+}
+.table-item:hover { background: var(--bg-hover); }
+.table-item.selected { background: var(--bg-hover); }
+.table-icon-spacer {
+  /* Equal to the folder row's .db-arrow width so a leaf key's icon sits in
+     the same column as its folder's arrow/icon — indentation is then purely
+     the per-depth pad, and a leaf under a folder is exactly one level deeper
+     (DB's table-under-db relationship) instead of two. */
+  width: 12px;
+  flex-shrink: 0;
+}
+.table-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+.table-name {
   font-family: var(--font-ui);
   font-size: 13px;
   color: var(--text-primary);
-  transition: background 0.12s ease;
-  user-select: none;
-}
-.key-item:hover { background: var(--bg-hover); }
-.key-item.selected { background: var(--bg-hover); color: var(--accent); }
-/* One row style for both tree and flat rendering — tree rows used to carry a
-   second, partly-inheriting rule set (.table-item/.table-name) whose missing
-   font-family/size made them render a size off next to the flat list. Every
-   row is a .key-item; folders add .folder for the bold label. Indentation:
-   arrow column (12px) + gap so leaf text lines up under folder labels. */
-.key-type-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  background: var(--bg-hover);
-  padding: 1px 4px;
-  border-radius: var(--radius-sm);
-  min-width: 42px;
-  text-align: center;
-  flex-shrink: 0;
-}
-.key-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  user-select: none;
 }
 .db-header {
   display: flex;
@@ -892,21 +900,6 @@ watch(() => props.sessionId, async (newId) => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.key-leaf-spacer {
-  width: 12px;
-  flex-shrink: 0;
-}
-.tree-children {
-  padding-left: 18px;
-}
-.folder-count {
-  margin-left: auto;
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
 .redis-pagination {
   display: flex;
   align-items: center;
@@ -917,6 +910,12 @@ watch(() => props.sessionId, async (newId) => {
   font-family: var(--font-ui);
   font-size: 12px;
   color: var(--text-secondary);
+}
+.result-count {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  white-space: nowrap;
 }
 .page-btn {
   border: 1px solid var(--border-subtle);
