@@ -851,8 +851,73 @@ watch(() => props.sessionId, async (newId) => {
   white-space: nowrap;
   user-select: none;
 }
-/* tree rows reuse DBTreePanel classes (db-header/db-arrow/db-name/table-item/
-   table-name); only the count badge and nesting indent are local. */
+/* Tree rows borrow DBTreePanel's visual language. The classes are re-declared
+   here because both components' styles are scoped — DBTreePanel's rules carry
+   its own data-v hash and never reach this component's DOM. Values are copied
+   verbatim (13px rows, 12px muted chevron/icon) so both trees read identical. */
+.db-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s ease;
+}
+.db-header:hover {
+  background: var(--bg-hover);
+}
+.db-arrow {
+  width: 12px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.db-arrow:hover {
+  color: var(--text-primary);
+}
+.db-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+.db-name {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.table-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s ease;
+}
+.table-item:hover {
+  background: var(--bg-hover);
+}
+.table-item.selected {
+  background: var(--bg-hover);
+}
+.table-icon-spacer {
+  width: 30px;
+  flex-shrink: 0;
+}
+.table-name {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .tree-children {
   padding-left: 18px;
 }
