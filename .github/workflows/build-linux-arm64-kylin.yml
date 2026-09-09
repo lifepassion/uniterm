@@ -1,4 +1,4 @@
-name: Build Linux ARM64 Kylin WebKit 4.0
+name: Build Linux ARM64 Kylin AppImage and DEB
 
 on:
   push:
@@ -544,45 +544,6 @@ jobs:
             uniterm-linux-arm64-webkit40-*.tar.gz
             uniterm-linux-arm64-webkit40-*.deb
 
-  diagnose-previous-bundle:
-    runs-on: ubuntu-24.04-arm
-    container:
-      image: ubuntu:20.04
-    permissions:
-      actions: read
-    steps:
-      - run: |
-          apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb xauth ca-certificates strace
-      - uses: actions/download-artifact@v4
-        with:
-          name: uniterm-appimage-arm64
-          run-id: 34312724603
-          github-token: ${{ github.token }}
-      - shell: bash
-        run: |
-          chmod +x ./*.AppImage
-          UNITERM_APPIMAGE_SMOKE_TEST=1 WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
-            xvfb-run -a strace -f -e trace=file,process -s 256 -o /tmp/old.trace \
-              ./*.AppImage --appimage-extract-and-run || true
-          grep -E 'WebKit|injected|execve' /tmp/old.trace | tail -100 || true
-          image=$(readlink -f ./*.AppImage)
-          mkdir /tmp/variant
-          cd /tmp/variant
-          "$image" --appimage-extract > /dev/null
-          sed -i "\|../../usr/share/fonts|c\<dir>$(pwd)/squashfs-root/usr/share/fonts</dir>" squashfs-root/etc/fonts/fonts.conf
-          echo 'TEST: absolute bundled font directory'
-          UNITERM_APPIMAGE_SMOKE_TEST=1 WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
-            xvfb-run -a ./squashfs-root/AppRun || true
-          sed -i '/export WEBKIT_DISABLE_COMPOSITING_MODE=1/d' squashfs-root/AppRun
-          echo 'TEST: compositing enabled, no session bus'
-          UNITERM_APPIMAGE_SMOKE_TEST=1 WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
-            xvfb-run -a ./squashfs-root/AppRun || true
-          apt-get install -y --no-install-recommends dbus-x11
-          echo 'TEST: compositing enabled, private session bus'
-          UNITERM_APPIMAGE_SMOKE_TEST=1 WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
-            xvfb-run -a dbus-run-session -- ./squashfs-root/AppRun || true
-
   test-appimage-clean:
     needs: build-arm64
     runs-on: ubuntu-24.04-arm
@@ -606,17 +567,21 @@ jobs:
           set -euxo pipefail
           sha256sum -c AppImage-SHA256SUMS
           chmod +x ./*.AppImage
-          # Extract-and-run also validates use on offline hosts without FUSE.
+          # Exercise relocation, spaces, XML escaping and operation without FUSE.
+          mkdir 'relocated & 中文目录'
+          mv ./*.AppImage 'relocated & 中文目录/'
+          cd 'relocated & 中文目录'
+          ulimit -c 0
           set +e
           UNITERM_APPIMAGE_SMOKE_TEST=1 WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
-            xvfb-run -a strace -f -e trace=file,process -s 256 -o appimage.trace \
+            xvfb-run -a strace -f -e trace=file,process -s 256 -o ../appimage.trace \
               ./*.AppImage --appimage-extract-and-run
           result=$?
           set -e
-          grep -E 'WebKit|injected|execve|ENOENT.*\.so' appimage.trace | tail -100 || true
+          grep -E 'WebKit|injected|execve|ENOENT.*\.so' ../appimage.trace | tail -100 || true
           exit "$result"
       - name: Upload clean environment trace
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: appimage-clean-trace
