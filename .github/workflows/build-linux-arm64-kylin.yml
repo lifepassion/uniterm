@@ -544,6 +544,29 @@ jobs:
             uniterm-linux-arm64-webkit40-*.tar.gz
             uniterm-linux-arm64-webkit40-*.deb
 
+  diagnose-previous-bundle:
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: ubuntu:20.04
+    permissions:
+      actions: read
+    steps:
+      - run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb xauth ca-certificates strace
+      - uses: actions/download-artifact@v4
+        with:
+          name: uniterm-appimage-arm64
+          run-id: 34312724603
+          github-token: ${{ github.token }}
+      - shell: bash
+        run: |
+          chmod +x ./*.AppImage
+          UNITERM_APPIMAGE_SMOKE_TEST=1 WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
+            xvfb-run -a strace -f -e trace=file,process -s 256 -o /tmp/old.trace \
+              ./*.AppImage --appimage-extract-and-run || true
+          grep -E 'WebKit|injected|execve' /tmp/old.trace | tail -100 || true
+
   test-appimage-clean:
     needs: build-arm64
     runs-on: ubuntu-24.04-arm
@@ -554,7 +577,7 @@ jobs:
       - name: Install only a virtual display server
         run: |
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb xauth ca-certificates
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb xauth ca-certificates strace
           if dpkg-query -W -f='${Status}' libwebkit2gtk-4.0-37 2>/dev/null | grep -q 'install ok installed'; then exit 1; fi
           if dpkg-query -W -f='${Status}' libgtk-3-0 2>/dev/null | grep -q 'install ok installed'; then exit 1; fi
           ldd --version | head -1
@@ -568,5 +591,17 @@ jobs:
           sha256sum -c AppImage-SHA256SUMS
           chmod +x ./*.AppImage
           # Extract-and-run also validates use on offline hosts without FUSE.
+          set +e
           UNITERM_APPIMAGE_SMOKE_TEST=1 WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
-            xvfb-run -a ./*.AppImage --appimage-extract-and-run
+            xvfb-run -a strace -f -e trace=file,process -s 256 -o appimage.trace \
+              ./*.AppImage --appimage-extract-and-run
+          result=$?
+          set -e
+          grep -E 'WebKit|injected|execve|ENOENT.*\.so' appimage.trace | tail -100 || true
+          exit "$result"
+      - name: Upload clean environment trace
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appimage-clean-trace
+          path: appimage.trace
