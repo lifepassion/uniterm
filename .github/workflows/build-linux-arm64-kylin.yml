@@ -2,7 +2,7 @@ name: Build Linux ARM64 Kylin WebKit 4.0
 
 on:
   push:
-    branches: [main, fix/kylin-master-password]
+    branches: [main, fix/kylin-appimage]
     paths:
       - '.github/workflows/build-linux-arm64-kylin.yml'
       - 'build/kylin/**'
@@ -12,7 +12,7 @@ on:
       version:
         description: "Version name"
         required: false
-        default: "v1.9.2-kylin-arm64.1"
+        default: "v1.9.2-kylin-arm64.2"
         type: string
 
 permissions:
@@ -31,8 +31,8 @@ jobs:
       CGO_ENABLED: "1"
       GOOS: linux
       GOARCH: arm64
-      VERSION: ${{ inputs.version || 'v1.9.2-kylin-arm64.1' }}
-      VITE_VERSION: ${{ inputs.version || 'v1.9.2-kylin-arm64.1' }}
+      VERSION: ${{ inputs.version || 'v1.9.2-kylin-arm64.2' }}
+      VITE_VERSION: ${{ inputs.version || 'v1.9.2-kylin-arm64.2' }}
 
     steps:
 
@@ -479,6 +479,39 @@ jobs:
           dpkg-deb -I \
             "uniterm-linux-arm64-webkit40-${VERSION}.deb"
 
+      - name: Bundle GTK and WebKit runtime into AppImage
+        shell: bash
+        run: |
+          set -euxo pipefail
+          apt-get install -y --no-install-recommends \
+            libgl1-mesa-dri libegl1-mesa libglx-mesa0 libgles2 \
+            glib-networking gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            fonts-dejavu-core fonts-noto-cjk adwaita-icon-theme \
+            bubblewrap xdg-dbus-proxy fontconfig
+          python3 build/kylin/appimage-bundle.py
+          curl -fL --retry 3 -o /tmp/appimagetool.AppImage \
+            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-aarch64.AppImage
+          echo 'f0837e7448a0c1e4e650a93bb3e85802546e60654ef287576f46c71c126a9158  /tmp/appimagetool.AppImage' | sha256sum -c -
+          curl -fL --retry 3 -o /tmp/appimage-runtime \
+            https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-aarch64
+          echo '00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444  /tmp/appimage-runtime' | sha256sum -c -
+          chmod +x /tmp/appimagetool.AppImage
+          ARCH=aarch64 /tmp/appimagetool.AppImage --appimage-extract-and-run \
+            --runtime-file /tmp/appimage-runtime dist/UniTerm.AppDir \
+            "uniterm-linux-arm64-webkit40-${VERSION}.AppImage"
+          sha256sum "uniterm-linux-arm64-webkit40-${VERSION}.AppImage" > AppImage-SHA256SUMS
+
+      - name: Upload AppImage for isolated validation
+        uses: actions/upload-artifact@v4
+        with:
+          name: uniterm-appimage-arm64
+          if-no-files-found: error
+          compression-level: 0
+          path: |
+            uniterm-linux-arm64-webkit40-*.AppImage
+            AppImage-SHA256SUMS
+            dist/UniTerm.AppDir/runtime-manifest.json
+
       - name: Final artifact information
         shell: bash
         run: |
@@ -510,3 +543,30 @@ jobs:
           path: |
             uniterm-linux-arm64-webkit40-*.tar.gz
             uniterm-linux-arm64-webkit40-*.deb
+
+  test-appimage-clean:
+    needs: build-arm64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    container:
+      image: ubuntu:20.04
+    steps:
+      - name: Install only a virtual display server
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb xauth ca-certificates
+          if dpkg-query -W -f='${Status}' libwebkit2gtk-4.0-37 2>/dev/null | grep -q 'install ok installed'; then exit 1; fi
+          if dpkg-query -W -f='${Status}' libgtk-3-0 2>/dev/null | grep -q 'install ok installed'; then exit 1; fi
+          ldd --version | head -1
+      - uses: actions/download-artifact@v4
+        with:
+          name: uniterm-appimage-arm64
+      - name: Verify archive and run without system WebKit or GTK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sha256sum -c AppImage-SHA256SUMS
+          chmod +x ./*.AppImage
+          # Extract-and-run also validates use on offline hosts without FUSE.
+          UNITERM_APPIMAGE_SMOKE_TEST=1 WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
+            xvfb-run -a ./*.AppImage --appimage-extract-and-run

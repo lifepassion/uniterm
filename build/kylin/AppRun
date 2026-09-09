@@ -1,0 +1,39 @@
+#!/bin/bash
+set -euo pipefail
+root=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+export APPDIR="$root"
+export XDG_DATA_DIRS="$root/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+export GSETTINGS_SCHEMA_DIR="$root/usr/share/glib-2.0/schemas"
+export GIO_MODULE_DIR="$root/usr/lib/aarch64-linux-gnu/gio/modules"
+export GTK_PATH="$root/usr/lib/aarch64-linux-gnu/gtk-3.0"
+export GTK_THEME=Adwaita
+export GTK_EXE_PREFIX="$root/usr"
+export GTK_DATA_PREFIX="$root/usr"
+export GDK_PIXBUF_MODULEDIR="$root/usr/lib/aarch64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders"
+export GST_PLUGIN_SYSTEM_PATH_1_0="$root/usr/lib/aarch64-linux-gnu/gstreamer-1.0"
+export GST_PLUGIN_PATH_1_0=
+export GST_PLUGIN_SCANNER="$root/usr/lib/aarch64-linux-gnu/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"
+export FONTCONFIG_FILE="$root/etc/fonts/fonts.conf"
+export __EGL_VENDOR_LIBRARY_FILENAMES="$root/usr/share/glvnd/egl_vendor.d/50_mesa.json"
+export LIBGL_DRIVERS_PATH="$root/usr/lib/dri"
+# Prefer the included software driver over incompatible vendor GL stacks.
+if [ "${UNITERM_HARDWARE_ACCELERATION:-0}" != 1 ]; then
+    export LIBGL_ALWAYS_SOFTWARE=1
+    export WEBKIT_DISABLE_COMPOSITING_MODE=1
+fi
+if [ ! -f /etc/ssl/certs/ca-certificates.crt ]; then
+    export SSL_CERT_FILE="$root/etc/ssl/certs/ca-certificates.crt"
+fi
+cache=$(mktemp -d "${TMPDIR:-/tmp}/uniterm-runtime.XXXXXX")
+trap 'rm -rf -- "$cache"' EXIT
+export GDK_PIXBUF_MODULE_FILE="$cache/pixbuf.cache"
+"$root/usr/lib/aarch64-linux-gnu/gdk-pixbuf-2.0/gdk-pixbuf-query-loaders" > "$GDK_PIXBUF_MODULE_FILE"
+export GTK_IM_MODULE_FILE="$cache/immodules.cache"
+"$root/usr/bin/gtk-query-immodules-3.0" "$root"/usr/lib/aarch64-linux-gnu/gtk-3.0/3.0.0/immodules/*.so > "$GTK_IM_MODULE_FILE"
+export GST_REGISTRY="$cache/gstreamer.registry"
+cd "$root/usr"
+if [ "${UNITERM_APPIMAGE_SMOKE_TEST:-0}" = 1 ]; then
+    "$root/usr/libexec/uniterm-smoke"
+else
+    "$root/usr/bin/uniterm" "$@"
+fi
