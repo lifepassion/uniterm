@@ -570,6 +570,10 @@ jobs:
           mkdir /tmp/variant
           cd /tmp/variant
           "$image" --appimage-extract > /dev/null
+          sed -i "\|../../usr/share/fonts|c\<dir>$(pwd)/squashfs-root/usr/share/fonts</dir>" squashfs-root/etc/fonts/fonts.conf
+          echo 'TEST: absolute bundled font directory'
+          UNITERM_APPIMAGE_SMOKE_TEST=1 WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
+            xvfb-run -a ./squashfs-root/AppRun || true
           sed -i '/export WEBKIT_DISABLE_COMPOSITING_MODE=1/d' squashfs-root/AppRun
           echo 'TEST: compositing enabled, no session bus'
           UNITERM_APPIMAGE_SMOKE_TEST=1 WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
