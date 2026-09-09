@@ -566,6 +566,18 @@ jobs:
             xvfb-run -a strace -f -e trace=file,process -s 256 -o /tmp/old.trace \
               ./*.AppImage --appimage-extract-and-run || true
           grep -E 'WebKit|injected|execve' /tmp/old.trace | tail -100 || true
+          image=$(readlink -f ./*.AppImage)
+          mkdir /tmp/variant
+          cd /tmp/variant
+          "$image" --appimage-extract > /dev/null
+          sed -i '/export WEBKIT_DISABLE_COMPOSITING_MODE=1/d' squashfs-root/AppRun
+          echo 'TEST: compositing enabled, no session bus'
+          UNITERM_APPIMAGE_SMOKE_TEST=1 WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
+            xvfb-run -a ./squashfs-root/AppRun || true
+          apt-get install -y --no-install-recommends dbus-x11
+          echo 'TEST: compositing enabled, private session bus'
+          UNITERM_APPIMAGE_SMOKE_TEST=1 WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
+            xvfb-run -a dbus-run-session -- ./squashfs-root/AppRun || true
 
   test-appimage-clean:
     needs: build-arm64
