@@ -2,16 +2,17 @@ name: Build Linux ARM64 Kylin WebKit 4.0
 
 on:
   push:
-    branches: [main, fix/kylin-arm64-ci]
+    branches: [main, fix/kylin-master-password]
     paths:
       - '.github/workflows/build-linux-arm64-kylin.yml'
       - 'build/kylin/**'
+      - 'backend/credentials/**'
   workflow_dispatch:
     inputs:
       version:
         description: "Version name"
         required: false
-        default: "v1.9.2-kylin-arm64"
+        default: "v1.9.2-kylin-arm64.1"
         type: string
 
 permissions:
@@ -30,8 +31,8 @@ jobs:
       CGO_ENABLED: "1"
       GOOS: linux
       GOARCH: arm64
-      VERSION: ${{ inputs.version || 'v1.9.2-kylin-arm64' }}
-      VITE_VERSION: ${{ inputs.version || 'v1.9.2-kylin-arm64' }}
+      VERSION: ${{ inputs.version || 'v1.9.2-kylin-arm64.1' }}
+      VITE_VERSION: ${{ inputs.version || 'v1.9.2-kylin-arm64.1' }}
 
     steps:
 
@@ -172,6 +173,10 @@ jobs:
           # The disposable CI container runs as root; Kylin users do not need this.
           WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 LIBGL_ALWAYS_SOFTWARE=1 \
             xvfb-run -a python3 build/kylin/test-webkit.py
+
+      - name: Test credentials without a desktop keychain
+        shell: bash
+        run: go test ./backend/credentials
 
       - name: Install frontend dependencies
         shell: bash

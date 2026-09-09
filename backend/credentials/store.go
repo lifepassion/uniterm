@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	stdsync "sync"
 
 	unitsync "github.com/ys-ll/uniterm/backend/sync"
@@ -95,7 +96,7 @@ func (s *Store) AutoUnlock() error {
 		}
 		key = k
 	case ModeMasterPassword:
-		if k, err := s.getKey("master-key/" + h); err == nil && k != nil {
+		if k := s.cachedMasterKey(meta.Salt); k != nil {
 			key = k
 		}
 	default:
@@ -156,10 +157,8 @@ func (s *Store) Unlock(masterPassword string) error {
 		return errors.New("not in master-password mode")
 	}
 	key := unitsync.DeriveKey(masterPassword, salt)
-	// Cache the derived key for future auto-unlock.
-	if err := s.keychain.Set("master-key/"+s.DirHash(), hex.EncodeToString(key)); err != nil {
-		return err
-	}
+	// Auto-unlock is optional; a desktop keychain is not required for this mode.
+	s.cacheMasterKey(salt, key)
 	s.set(mode, salt, key)
 	return nil
 }
@@ -204,18 +203,37 @@ func (s *Store) SetKey(key []byte) {
 // Rekey persists the new mode/salt/key (keychain entry + credentials.meta) and
 // swaps them into memory. Used by Setup and switch-mode orchestration.
 func (s *Store) Rekey(mode string, salt, key []byte) error {
-	entry := "keychain-key/" + s.DirHash()
-	if mode == ModeMasterPassword {
-		entry = "master-key/" + s.DirHash()
-	}
-	if err := s.keychain.Set(entry, hex.EncodeToString(key)); err != nil {
-		return err
+	if mode != ModeMasterPassword {
+		// In keychain mode this is the only durable copy of the key.
+		if err := s.keychain.Set("keychain-key/"+s.DirHash(), hex.EncodeToString(key)); err != nil {
+			return err
+		}
 	}
 	if err := WriteMeta(s.dataDir, &Meta{Mode: mode, Salt: salt}); err != nil {
 		return err
 	}
+	if mode == ModeMasterPassword {
+		s.cacheMasterKey(salt, key)
+	}
 	s.set(mode, salt, key)
 	return nil
+}
+
+// Bind an optional cache entry to its derivation salt. If a password change
+// succeeds while the keychain is locked, an old cached key must not auto-unlock
+// the new metadata. Legacy entries without a salt require one password unlock.
+func (s *Store) cacheMasterKey(salt, key []byte) {
+	_ = s.keychain.Set("master-key/"+s.DirHash(), hex.EncodeToString(salt)+":"+hex.EncodeToString(key))
+}
+
+func (s *Store) cachedMasterKey(salt []byte) []byte {
+	value, err := s.keychain.Get("master-key/" + s.DirHash())
+	if err != nil { return nil }
+	parts := strings.SplitN(value, ":", 2)
+	if len(parts) != 2 || parts[0] != hex.EncodeToString(salt) { return nil }
+	key, err := hex.DecodeString(parts[1])
+	if err != nil || len(key) != 32 { return nil }
+	return key
 }
 
 // ClearKeychainCache removes the master-password derived-key cache. Used when
