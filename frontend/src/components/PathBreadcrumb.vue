@@ -23,7 +23,7 @@
           v-if="item === '...'"
           class="breadcrumb-part breadcrumb-ellipsis"
           @click.stop="onEllipsisClick"
-        ><MoreHorizontal :size="14" /></span>
+        ><MoreHorizontal :size="'0.875rem'" /></span>
         <span
           v-else-if="isWindowsPath && item === pathParts[0]"
           class="breadcrumb-part breadcrumb-drive"
@@ -47,7 +47,7 @@
         :title="t('sftp.bookmark.title')"
         @click.stop="bookmarkMenuRef?.toggle($event.currentTarget)"
       >
-        <Bookmark :size="14" :class="{ 'bookmark-active': hasCurrentPathBookmarked }" />
+        <Bookmark :size="'0.875rem'" :class="{ 'bookmark-active': hasCurrentPathBookmarked }" />
       </button>
     </template>
 
@@ -99,7 +99,7 @@
             @click.stop="onRemoveBookmark(savedPath)"
             :title="t('sftp.bookmark.remove')"
           >
-            <Trash2 :size="12" />
+            <Trash2 :size="'0.75rem'" />
           </button>
         </template>
       </MenuItem>
@@ -353,8 +353,8 @@ function onBookmarkClick(path: string) {
 .sftp-breadcrumb {
   display: flex;
   align-items: center;
-  padding: 4px 12px;
-  font-size: 12px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
   font-family: var(--font-mono);
   color: var(--text-primary);
   background: var(--bg-elevated);
@@ -367,7 +367,7 @@ function onBookmarkClick(path: string) {
 }
 .breadcrumb-part {
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 0.125rem 0.25rem;
   border-radius: var(--radius-sm);
   transition: all 0.1s ease;
   flex-shrink: 0;
@@ -383,30 +383,30 @@ function onBookmarkClick(path: string) {
 .breadcrumb-ellipsis {
   color: var(--text-disabled);
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 0.125rem 0.375rem;
 }
 .drive-arrow {
-  font-size: 8px;
-  margin-left: 4px;
+  font-size: 0.5rem;
+  margin-left: 0.25rem;
   color: var(--text-disabled);
 }
 .breadcrumb-label {
   color: var(--accent);
   font-weight: 600;
-  margin-right: 8px;
+  margin-right: 0.5rem;
   flex-shrink: 0;
 }
 .separator {
   color: var(--text-disabled);
-  margin: 0 2px;
+  margin: 0 0.125rem;
   flex-shrink: 0;
 }
 .bookmark-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 1.5rem;
+  height: 1.5rem;
   margin-left: auto;
   flex-shrink: 0;
   background: transparent;
@@ -446,8 +446,8 @@ function onBookmarkClick(path: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 1.125rem;
+  height: 1.125rem;
   flex-shrink: 0;
   background: transparent;
   border: none;

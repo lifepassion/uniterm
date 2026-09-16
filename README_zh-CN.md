@@ -42,7 +42,7 @@
 
 - **远程终端** — SSH / Telnet / Mosh / Raw TCP，密码/私钥认证；含 SSH 隧道端口转发（任意连接可经 SSH 跳板访问）
 - **本地 & 串口终端** — PowerShell / CMD / Git Bash / WSL，以及串口连接（波特率等参数、本地回显）
-- **文件传输** — SFTP / FTP / FTPS / SMB / WebDAV / S3 / Zmodem，双栏浏览、鼠标拖拽上传下载，SSH 内 `rz`/`sz`
+- **文件传输** — SFTP / SCP / FTP / FTPS / SMB / WebDAV / S3 / Zmodem，双栏浏览、鼠标拖拽上传下载，SSH 内 `rz`/`sz`
 - **远程桌面** — RDP（Windows 远程桌面）、VNC（Linux 远程控制）、SPICE（KVM/QEMU 虚拟机）、X11（X Window 图形界面转发）
 - **数据库客户端** — MySQL / PostgreSQL / Oracle / SQL Server / rqlite / Redis / MongoDB / Elasticsearch
 - **容器** — Kubernetes / Docker / Podman / nerdctl (containerd) / WSLC
@@ -81,8 +81,9 @@
 | 终端 | Serial | 串口终端连接，支持波特率等参数配置 |
 | 终端 | Raw TCP | 原始 TCP 控制台会话，直连主机端口收发原始字节流 |
 | 终端 | Local | PowerShell、CMD、Git Bash 等本地 Shell |
-| 终端 | WSL | 通过本地终端打开已安装的 WSL 发行版 |
+| 终端 | WSL | 通过本地终端打开已安装的 WSL 发行版（仅 Windows） |
 | 文件传输 | SFTP | 服务器文件管理与传输 |
+| 文件传输 | SCP | 兼容旧版 SSH 服务器的降级方案，适用于不支持 SFTP 协议的服务器 |
 | 文件传输 | FTP / FTPS | 网站空间、NAS 文件传输 |
 | 文件传输 | SMB | Windows 共享文件夹、NAS 文件访问 |
 | 文件传输 | WebDAV | WebDAV 服务器文件管理 |
@@ -104,7 +105,7 @@
 | 容器 | Docker | 容器与镜像管理，支持本机或 SSH 远程主机 |
 | 容器 | Podman | 兼容 Docker 的容器引擎，支持本机或 SSH 远程主机 |
 | 容器 | nerdctl (containerd) | containerd 容器管理，支持切换 namespace |
-| 容器 | WSLC | Windows WSL2 Container 运行时 |
+| 容器 | WSLC | Windows WSL2 Container 运行时（仅 Windows） |
 
 Oracle Database 支持基于纯 Go 驱动实现。uniTerm 不随安装包分发 Oracle Database、Oracle Instant Client、OJDBC、Wallet 文件或 Oracle 品牌素材；用户需自行确保其 Oracle 授权、凭据和数据库访问权限合规。
 
@@ -284,6 +285,10 @@ uniTerm/
 - [@jiayunora](https://github.com/jiayunora)
 - [@iCarrear](https://github.com/iCarrear)
 - [@boltomli](https://github.com/boltomli)
+- [@kxn](https://github.com/kxn)
+- [@windtear](https://github.com/windtear)
+- [@Sunshow](https://github.com/Sunshow)
+- [@feuvan](https://github.com/feuvan)
 
 ## 开源协议
 

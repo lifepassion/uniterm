@@ -8,10 +8,10 @@
         style="flex: 1"
         clearable
       >
-        <template #prefix><el-icon :size="14"><Search /></el-icon></template>
+        <template #prefix><el-icon :size="'0.875rem'"><Search /></el-icon></template>
       </el-input>
       <el-button size="small" @click="showCreate = true">
-        <Plus :size="14" /> {{ t('settings.commandsCreate') }}
+        <Plus :size="'0.875rem'" /> {{ t('settings.commandsCreate') }}
       </el-button>
     </div>
 
@@ -25,14 +25,14 @@
       class="command-card"
       @click="openEdit(cmd)"
     >
-      <Terminal :size="18" class="command-card-icon" />
+      <Terminal :size="'1.125rem'" class="command-card-icon" />
       <div class="command-card-info">
         <div class="command-card-title">
           <span class="command-card-name">{{ cmd.name }}</span>
         </div>
         <div class="command-card-desc">{{ cmd.description }}</div>
         <div v-if="cmd.path" class="command-card-path" @click.stop="openFolder(cmd)" :title="t('settings.commandsOpenFolder')">
-          <FolderOpen :size="12" class="command-card-path-icon" />
+          <FolderOpen :size="'0.75rem'" class="command-card-path-icon" />
           <span class="command-card-path-text">{{ cmd.path }}</span>
         </div>
       </div>
@@ -47,10 +47,10 @@
           :title="cmd.locked ? t('settings.commandsLocked') : t('settings.commandsUnlocked')"
           @click="store.toggleLocked(cmd.name)"
         >
-          <el-icon :size="15"><Lock v-if="cmd.locked" /><LockOpen v-else /></el-icon>
+          <el-icon :size="'0.9375rem'"><Lock v-if="cmd.locked" /><LockOpen v-else /></el-icon>
         </el-button>
         <el-button link @click.stop="actionMenuRef?.toggle($event.currentTarget, cmd)">
-          <el-icon :size="15"><Settings2 /></el-icon>
+          <el-icon :size="'0.9375rem'"><Settings2 /></el-icon>
         </el-button>
         <Menu ref="actionMenuRef" v-model:visible="actionMenuVisible">
           <template #default="{ current }">
@@ -72,7 +72,7 @@
     <el-dialog
       v-model="showEdit"
       :title="editCommand ? '/' + editCommand.name : ''"
-      width="600px"
+      width="37.5rem"
     >
       <div v-if="editCommand" class="command-edit">
         <el-alert
@@ -81,9 +81,9 @@
           type="info"
           :closable="false"
           show-icon
-          style="margin-bottom: 12px"
+          style="margin-bottom: 0.75rem"
         />
-        <el-form label-position="right" label-width="60px" size="small">
+        <el-form label-position="right" label-width="3.75rem" size="small">
           <el-form-item :label="t('settings.commandsDescription')">
             <el-input
               v-model="editForm.description"
@@ -219,26 +219,26 @@ onMounted(() => {
 .commands-manager {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0.625rem;
 }
 .commands-toolbar {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
   align-items: center;
 }
 .commands-empty {
   color: var(--el-text-color-secondary);
-  padding: 32px 0;
+  padding: 2rem 0;
   text-align: center;
 }
 .command-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 0.75rem;
+  padding: 0.75rem 0.875rem;
   background: var(--el-fill-color-lighter);
   border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
+  border-radius: 0.5rem;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
@@ -256,35 +256,35 @@ onMounted(() => {
 .command-card-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .command-card-name {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--el-text-color-primary);
 }
 .command-card-desc {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--el-text-color-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  margin-top: 2px;
+  margin-top: 0.125rem;
 }
 .command-card-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   flex-shrink: 0;
 }
 .command-card-path {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 4px;
-  font-size: 11px;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+  font-size: 0.6875rem;
   color: var(--el-text-color-placeholder);
   cursor: pointer;
   width: fit-content;
@@ -304,9 +304,9 @@ onMounted(() => {
   text-align: left;
 }
 .command-args-hint {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--el-text-color-secondary);
-  margin: 4px 0 0;
+  margin: 0.25rem 0 0;
   line-height: 1.5;
 }
 </style>

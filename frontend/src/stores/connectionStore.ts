@@ -20,6 +20,20 @@ export interface GroupedConnections {
   ungrouped: ConnectionConfig[]
 }
 
+// One-time migration of legacy configs: Redis/MongoDB/Elasticsearch used to be
+// stored as type "database" with a dbType discriminator; they are standalone
+// types now. Idempotent — already-migrated configs pass through untouched.
+// Applied on load and on add so imports/synced stores are covered too.
+export function migrateLegacyDatabaseTypes(connections: ConnectionConfig[]): ConnectionConfig[] {
+  for (const c of connections) {
+    if (c.type === 'database' && (c.dbType === 'redis' || c.dbType === 'mongodb' || c.dbType === 'elasticsearch')) {
+      c.type = c.dbType
+      delete c.dbType
+    }
+  }
+  return connections
+}
+
 export const useConnectionStore = defineStore('connection', () => {
   const connections = ref<ConnectionConfig[]>([])
   const groups = ref<ConnectionGroup[]>([])
@@ -30,7 +44,7 @@ export const useConnectionStore = defineStore('connection', () => {
     try {
       const data = await LoadConnections() as { groups?: ConnectionGroup[]; connections?: ConnectionConfig[] }
       groups.value = data.groups || []
-      connections.value = (data.connections || []) as ConnectionConfig[]
+      connections.value = migrateLegacyDatabaseTypes((data.connections || []) as ConnectionConfig[])
     } catch (e) {
       console.error('Failed to load connections:', e)
     } finally {
@@ -50,6 +64,7 @@ export const useConnectionStore = defineStore('connection', () => {
   }
 
   async function add(config: ConnectionConfig) {
+    migrateLegacyDatabaseTypes([config])
     if (!config.id) {
       config.id = `conn-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     }

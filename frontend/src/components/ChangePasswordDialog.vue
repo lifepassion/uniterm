@@ -2,11 +2,11 @@
   <el-dialog append-to-body
     v-model="visible"
     :title="t('changePassword.title')"
-    width="480px"
+    width="30rem"
     :close-on-click-modal="false"
     @close="handleClose"
   >
-    <el-form label-width="120px" class="change-password-form">
+    <el-form label-width="7.5rem" class="change-password-form">
       <el-form-item :label="t('changePassword.current')">
         <el-input
           v-model="currentPassword"
@@ -116,19 +116,19 @@ async function handleSubmit() {
 .change-password-form {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0.25rem;
 }
 
 .password-warning {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
-  margin-top: 8px;
+  margin-top: 0.5rem;
   line-height: 1.4;
 }
 
 .form-error {
   color: var(--el-color-danger);
-  font-size: 13px;
-  margin-top: 8px;
+  font-size: 0.8125rem;
+  margin-top: 0.5rem;
 }
 </style>

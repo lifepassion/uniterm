@@ -4,7 +4,7 @@
     <div class="drawer-resizer" @mousedown="onResizeStart"></div>
     <div class="detail-drawer-header">
       <span class="detail-drawer-title">{{ headerTitle }}</span>
-      <el-button link @click="$emit('close')"><el-icon><Close :size="16" /></el-icon></el-button>
+      <el-button link @click="$emit('close')"><el-icon><Close :size="'1rem'" /></el-icon></el-button>
     </div>
 
     <template v-if="mode === 'detail'">
@@ -13,7 +13,7 @@
         <button class="db-tab" :class="{ active: tab === 'yaml' }" @click="tab = 'yaml'">YAML</button>
       </div>
 
-      <div v-show="tab === 'struct'" class="detail-body" @contextmenu="copyMenu.onContextMenu">
+      <div v-show="tab === 'struct'" class="detail-body" @contextmenu="onCopyContextMenu">
         <div v-for="sec in sections" :key="sec.label" class="detail-section">
           <div class="detail-section-title">{{ sec.label }}</div>
           <div v-for="f in sec.fields" :key="f.label" class="detail-row">
@@ -44,7 +44,7 @@
             <el-button size="small" @click="cancelEdit">{{ t('common.cancel') }}</el-button>
           </template>
         </div>
-        <pre v-if="!editing" class="k8s-yaml-drawer-body" @contextmenu="copyMenu.onContextMenu">{{ yamlText }}</pre>
+        <pre v-if="!editing" class="k8s-yaml-drawer-body" @contextmenu="onCopyContextMenu">{{ yamlText }}</pre>
         <SyntaxEditor v-else v-model="draft" lang="yaml" compact />
         <div v-if="saveError" class="yaml-error">{{ saveError }}</div>
       </div>
@@ -52,10 +52,10 @@
 
     <div v-else-if="mode === 'logs'" class="logs-pane">
       <div class="logs-toolbar">
-        <el-select v-model="logContainer" size="small" style="width: 160px" @change="restartLogs">
+        <el-select v-model="logContainer" size="small" style="width: 10.0rem" @change="restartLogs">
           <el-option v-for="c in containerNames" :key="c" :label="c" :value="c" />
         </el-select>
-        <el-select v-model="logTail" size="small" style="width: 90px" @change="restartLogs">
+        <el-select v-model="logTail" size="small" style="width: 5.625rem" @change="restartLogs">
           <el-option :value="100" label="100" />
           <el-option :value="500" label="500" />
           <el-option :value="2000" label="2000" />
@@ -325,7 +325,7 @@ onBeforeUnmount(stopLogs)
   top: 0;
   right: 0;
   bottom: 0;
-  width: 420px;
+  width: 26.25rem;
   background: var(--bg-elevated);
   border-left: 1px solid var(--border-subtle);
   transform: translateX(100%);
@@ -344,7 +344,7 @@ onBeforeUnmount(stopLogs)
   top: 0;
   left: 0;
   bottom: 0;
-  width: 5px;
+  width: 0.3125rem;
   cursor: col-resize;
   z-index: 101;
   background: transparent;
@@ -358,13 +358,13 @@ onBeforeUnmount(stopLogs)
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 
 .detail-drawer-title {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-ui);
@@ -373,15 +373,15 @@ onBeforeUnmount(stopLogs)
 /* Detail rows copied from MonitorTabContent.vue (.process-detail rows); the
    per-section scroll is dropped so the whole detail-body scrolls once. */
 .detail-section {
-  padding: 0 4px;
-  margin-bottom: 12px;
+  padding: 0 0.25rem;
+  margin-bottom: 0.75rem;
 }
 
 .detail-row {
   display: flex;
-  padding: 10px 0;
+  padding: 0.625rem 0;
   border-bottom: 1px solid var(--border-subtle);
-  gap: 12px;
+  gap: 0.75rem;
 }
 
 .detail-row:last-child {
@@ -389,16 +389,16 @@ onBeforeUnmount(stopLogs)
 }
 
 .detail-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
   font-family: var(--font-ui);
   flex-shrink: 0;
-  width: 100px;
-  min-width: 100px;
+  width: 6.25rem;
+  min-width: 6.25rem;
 }
 
 .detail-value {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary);
   font-family: var(--font-mono);
   word-break: break-all;
@@ -411,18 +411,18 @@ onBeforeUnmount(stopLogs)
 .db-tabs {
   display: flex;
   border-bottom: 1px solid var(--border-subtle);
-  padding: 0 8px;
+  padding: 0 0.5rem;
   flex-shrink: 0;
 }
 .db-tab {
-  padding: 6px 16px;
+  padding: 0.375rem 1rem;
   border: none;
   background: none;
   color: var(--text-secondary);
   cursor: pointer;
   font-family: var(--font-ui);
-  font-size: 13px;
-  border-bottom: 2px solid transparent;
+  font-size: 0.8125rem;
+  border-bottom: 0.125rem solid transparent;
   transition: all 0.15s ease;
 }
 .db-tab:hover {
@@ -437,10 +437,10 @@ onBeforeUnmount(stopLogs)
 /* Preformatted YAML body */
 .k8s-yaml-drawer-body {
   margin: 0;
-  padding: 12px;
+  padding: 0.75rem;
   overflow: auto;
   font-family: var(--font-mono, monospace);
-  font-size: 12px;
+  font-size: 0.75rem;
   white-space: pre-wrap;
   height: 100%;
   box-sizing: border-box;
@@ -448,23 +448,23 @@ onBeforeUnmount(stopLogs)
   cursor: text;
 }
 
-.detail-body { flex: 1; overflow: auto; padding: 12px 16px; }
-.detail-section-title { font-weight: 600; color: var(--text-secondary); margin: 8px 0 4px; }
+.detail-body { flex: 1; overflow: auto; padding: 0.75rem 1rem; }
+.detail-section-title { font-weight: 600; color: var(--text-secondary); margin: 0.5rem 0 0.25rem; }
 .yaml-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.yaml-actions { display: flex; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); }
-.yaml-error { color: var(--el-color-danger, #f56); padding: 8px 12px; font-size: 12px; }
+.yaml-actions { display: flex; gap: 0.5rem; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-subtle); }
+.yaml-error { color: var(--el-color-danger, #f56); padding: 0.5rem 0.75rem; font-size: 0.75rem; }
 
-.detail-drawer.wide { width: 640px; }
+.detail-drawer.wide { width: 40rem; }
 .logs-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 /* 统一控件间距，避免 el-checkbox 自带 margin 造成时间戳等控件左右间隔过大 */
-.logs-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); flex-wrap: wrap; }
+.logs-toolbar { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-subtle); flex-wrap: wrap; }
 .logs-toolbar :deep(.el-checkbox) { margin-right: 0; }
 .logs-body { flex: 1; overflow: auto; }
 .log-line { white-space: pre-wrap; word-break: break-all; }
 /* 不换行模式：整行不折行，横向滚动 */
 .logs-nowrap .log-line { white-space: pre; word-break: normal; }
 /* 时间戳与正文之间留一个空格 */
-.log-ts { color: var(--text-muted); margin-right: 8px; }
+.log-ts { color: var(--text-muted); margin-right: 0.5rem; }
 .log-ts:empty { margin-right: 0; }
 .logs-hide-ts .log-ts { display: none; }
 </style>

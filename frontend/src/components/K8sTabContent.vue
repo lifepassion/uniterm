@@ -318,7 +318,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 .db-resizer {
-  width: 4px;
+  width: 0.25rem;
   cursor: col-resize;
   background: transparent;
   flex-shrink: 0;
@@ -335,15 +335,15 @@ onBeforeUnmount(() => {
 }
 .k8s-fatal {
   color: var(--el-color-danger, #f56);
-  padding: 12px;
+  padding: 0.75rem;
 }
 .k8s-connecting {
-  padding: 12px;
+  padding: 0.75rem;
   opacity: 0.7;
 }
 .k8s-ns-warning {
-  padding: 6px 12px;
-  font-size: 12px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
   color: var(--el-color-warning, #e6a23c);
   background: var(--el-color-warning-light-9, #fdf6ec);
   border-bottom: 1px solid var(--el-color-warning-light-5, #faecd8);

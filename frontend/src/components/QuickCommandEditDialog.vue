@@ -2,11 +2,11 @@
   <el-dialog append-to-body
     v-model="visible"
     :title="editingId ? t('quickCommands.editCommand') : t('quickCommands.addCommand')"
-    width="620px"
+    width="38.75rem"
     :close-on-click-modal="false"
     @close="resetForm"
   >
-    <el-form label-width="60px">
+    <el-form label-width="3.75rem">
       <el-form-item :label="t('quickCommands.name')">
         <el-input
           v-model="formName"
@@ -56,7 +56,7 @@
   </el-dialog>
 
   <!-- New group dialog -->
-  <el-dialog append-to-body v-model="showNewGroupDialog" :title="t('conn.newGroupTitle')" width="360px" :close-on-click-modal="false">
+  <el-dialog append-to-body v-model="showNewGroupDialog" :title="t('conn.newGroupTitle')" width="22.5rem" :close-on-click-modal="false">
     <el-form @submit.prevent="confirmNewGroup">
       <el-form-item :label="t('conn.groupName')">
         <el-input v-model="newGroupName" :placeholder="t('conn.groupNamePlaceholder')" @keyup.enter="confirmNewGroup" />
@@ -161,8 +161,8 @@ function resetForm() {
 }
 .form-error {
   color: var(--error);
-  font-size: 12px;
-  margin-top: -8px;
-  margin-bottom: 8px;
+  font-size: 0.75rem;
+  margin-top: -0.5rem;
+  margin-bottom: 0.5rem;
 }
 </style>

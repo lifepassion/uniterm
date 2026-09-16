@@ -7,14 +7,14 @@
   >
     <div class="resize-handle" @mousedown="onResizeStart" />
     <div class="sidebar-header" @contextmenu.prevent="onTabStripContextMenu">
-      <button class="sidebar-tab" :class="{ active: activeView === 'connections' }" @click="activeView = 'connections'" :title="t('header.connections')"><el-icon><Network :size="14" /></el-icon></button>
-      <button v-if="tabVisible('files')" class="sidebar-tab" :class="{ active: activeView === 'files' }" @click="onFilesTabClick" :title="t('header.files')"><el-icon><FolderTree :size="14" /></el-icon></button>
-      <button v-if="tabVisible('monitor')" class="sidebar-tab" :class="{ active: activeView === 'monitor' }" @click="onMonitorTabClick" :title="t('header.monitor')"><el-icon><Activity :size="14" /></el-icon></button>
-      <button v-if="tabVisible('tunnels')" class="sidebar-tab" :class="{ active: activeView === 'tunnels' }" @click="activeView = 'tunnels'" :title="t('tunnels.tunnelsTab')"><el-icon><ArrowRightLeft :size="14" /></el-icon></button>
-      <button v-if="tabVisible('quickCommands')" class="sidebar-tab" :class="{ active: activeView === 'quickCommands' }" @click="activeView = 'quickCommands'" :title="t('quickCommands.quickCommandsTab')"><el-icon><Zap :size="14" /></el-icon></button>
-      <button v-if="tabVisible('history')" class="sidebar-tab" :class="{ active: activeView === 'history' }" @click="activeView = 'history'" :title="t('quickCommands.historyTab')"><el-icon><Clock :size="14" /></el-icon></button>
-      <button v-if="tabVisible('personalization')" class="sidebar-tab" :class="{ active: activeView === 'personalization' }" @click="activeView = 'personalization'" :title="t('sidebar.personalization')"><el-icon><Palette :size="14" /></el-icon></button>
-      <button class="icon-btn" @click="emit('toggle')" :title="t('sidebar.collapse')"><el-icon><X :size="14" /></el-icon></button>
+      <button class="sidebar-tab" :class="{ active: activeView === 'connections' }" @click="activeView = 'connections'" :title="t('header.connections')"><el-icon><Network :size="'0.875rem'" /></el-icon></button>
+      <button v-if="tabVisible('files')" class="sidebar-tab" :class="{ active: activeView === 'files' }" @click="onFilesTabClick" :title="t('header.files')"><el-icon><FolderTree :size="'0.875rem'" /></el-icon></button>
+      <button v-if="tabVisible('monitor')" class="sidebar-tab" :class="{ active: activeView === 'monitor' }" @click="onMonitorTabClick" :title="t('header.monitor')"><el-icon><Activity :size="'0.875rem'" /></el-icon></button>
+      <button v-if="tabVisible('tunnels')" class="sidebar-tab" :class="{ active: activeView === 'tunnels' }" @click="activeView = 'tunnels'" :title="t('tunnels.tunnelsTab')"><el-icon><ArrowRightLeft :size="'0.875rem'" /></el-icon></button>
+      <button v-if="tabVisible('quickCommands')" class="sidebar-tab" :class="{ active: activeView === 'quickCommands' }" @click="activeView = 'quickCommands'" :title="quickCommandsTitle"><el-icon><Zap :size="'0.875rem'" /></el-icon></button>
+      <button v-if="tabVisible('history')" class="sidebar-tab" :class="{ active: activeView === 'history' }" @click="activeView = 'history'" :title="t('quickCommands.historyTab')"><el-icon><Clock :size="'0.875rem'" /></el-icon></button>
+      <button v-if="tabVisible('personalization')" class="sidebar-tab" :class="{ active: activeView === 'personalization' }" @click="activeView = 'personalization'" :title="t('sidebar.personalization')"><el-icon><Palette :size="'0.875rem'" /></el-icon></button>
+      <button class="icon-btn" @click="emit('toggle')" :title="t('sidebar.collapse')"><el-icon><X :size="'0.875rem'" /></el-icon></button>
     </div>
 
     <template v-if="activeView === 'connections'">
@@ -28,23 +28,13 @@
         >
           <template #suffix>
             <span class="filter-trigger" :class="{ active: selectedTypeFilter !== 'all' }" @click.stop="filterMenuRef?.toggle($event.currentTarget)">
-              <el-icon><Filter :size="14" /></el-icon>
+              <el-icon><Filter :size="'0.875rem'" /></el-icon>
             </span>
-            <Menu ref="filterMenuRef" align="end" v-model:visible="showFilterMenu">
-              <MenuItem :class="{ active: selectedTypeFilter === 'all' }" @click="onFilterSelect('all')">{{ t('sidebar.filterAll') }}</MenuItem>
-              <MenuSubmenu v-for="grp in filterGroups" :key="grp.key" :label="grp.label">
-                <MenuItem
-                  v-for="it in grp.items"
-                  :key="it.key"
-                  :class="{ active: selectedTypeFilter === it.key }"
-                  @click="onFilterSelect(it.key)"
-                >{{ it.label }}</MenuItem>
-              </MenuSubmenu>
-            </Menu>
+            <TypeFilterMenu ref="filterMenuRef" align="end" v-model="selectedTypeFilter" />
           </template>
         </el-input>
         <button class="sb-icon-btn" :title="t('header.newConnection')" @click.stop="newConnMenuRef?.toggle($event.currentTarget)">
-          <Plus :size="15" />
+          <Plus :size="'0.9375rem'" />
         </button>
         <!-- New-connection menu — Menu.vue, teleported + anchored right-edge (align=end). -->
         <Menu ref="newConnMenuRef" align="end" v-model:visible="showNewConnMenu">
@@ -57,6 +47,52 @@
       </div>
 
     <div class="connection-list" tabindex="0" @keydown="onListKeydown" @contextmenu.prevent="onEmptyAreaContextMenu">
+      <!-- Virtual favorites group — persisted in favorites.json, rendered above all groups -->
+      <template v-if="favoriteConns.length > 0">
+        <div class="group-header" @click="favoritesExpanded = !favoritesExpanded" @contextmenu.prevent>
+          <span class="group-arrow">
+            <el-icon v-if="favoritesExpanded"><ChevronDown :size="'0.875rem'" /></el-icon>
+            <el-icon v-else><ChevronRight :size="'0.875rem'" /></el-icon>
+          </span>
+          <span class="group-name">{{ t('sidebar.favorites') }}</span>
+          <span class="group-count">{{ favoriteConns.length }}</span>
+        </div>
+        <template v-if="favoritesExpanded">
+          <div
+            v-for="conn in favoriteConns"
+            :key="conn.id"
+            class="connection-item indented"
+            :data-conn-id="conn.id"
+            :class="{
+              active: selectedIds.has(conn.id),
+              'has-session': openPanelConnIds.has(conn.id),
+              'drop-before': dropIndicator?.id === conn.id && dropIndicator?.position === 'before',
+              'drop-after': dropIndicator?.id === conn.id && dropIndicator?.position === 'after',
+            }"
+            draggable="true"
+            @dragstart="onDragStart($event, conn)"
+            @dragend="onDragEnd"
+            @dragover.prevent="onFavDragOver($event, conn)"
+            @drop.prevent="onFavDrop($event, conn)"
+            @click="onItemClick($event, conn)"
+            @dblclick="onItemDblClick(conn)"
+            @contextmenu.prevent="onContextMenu($event, conn)"
+          >
+            <span class="conn-icon"><component :is="connIcon(conn)" :size="'0.875rem'" /></span>
+            <div class="conn-details">
+              <span class="name">{{ conn.name }}</span>
+              <span class="conn-meta">
+                <span class="host">{{ getSubtitle(conn) }}</span>
+              </span>
+            </div>
+            <!-- Inside the favorites group the star is hover-only (everything
+                 here is favorited; a lit star would be redundant noise) -->
+            <button class="conn-fav-btn lit" :title="t('sidebar.removeFromFavorites')" @click.stop="favoriteStore.toggle(conn.id)"><Star :size="'0.75rem'" /></button>
+            <button class="conn-more-btn" @click.stop="onConnMoreClick($event, conn)" :title="t('terminal.more')"><MoreHorizontal :size="'0.875rem'" /></button>
+          </div>
+        </template>
+      </template>
+
       <!-- Nested group tree -->
       <GroupTreeItem
         v-for="root in filteredGrouped.roots"
@@ -77,8 +113,8 @@
           @drop.prevent="onGroupDrop('__ungrouped__', $event)"
         >
           <span class="group-arrow">
-            <el-icon v-if="expandedGroups.has('__ungrouped__')"><ChevronDown :size="14" /></el-icon>
-            <el-icon v-else><ChevronRight :size="14" /></el-icon>
+            <el-icon v-if="expandedGroups.has('__ungrouped__')"><ChevronDown :size="'0.875rem'" /></el-icon>
+            <el-icon v-else><ChevronRight :size="'0.875rem'" /></el-icon>
           </span>
           <span class="group-name">{{ t('conn.noGroup') }}</span>
           <span v-if="filteredGrouped.ungrouped.length > 0" class="group-count">{{ filteredGrouped.ungrouped.length }}</span>
@@ -104,14 +140,15 @@
             @dblclick="onItemDblClick(conn)"
             @contextmenu.prevent="onContextMenu($event, conn)"
           >
-            <span class="conn-icon"><component :is="connIcon(conn)" :size="14" /></span>
+            <span class="conn-icon"><component :is="connIcon(conn)" :size="'0.875rem'" /></span>
             <div class="conn-details">
               <span class="name">{{ conn.name }}</span>
               <span class="conn-meta">
                 <span class="host">{{ getSubtitle(conn) }}</span>
               </span>
             </div>
-            <button class="conn-more-btn" @click.stop="onConnMoreClick($event, conn)" :title="t('terminal.more')"><MoreHorizontal :size="14" /></button>
+            <button class="conn-fav-btn" :class="{ on: favoriteStore.isFavorite(conn.id) }" :title="favoriteStore.isFavorite(conn.id) ? t('sidebar.removeFromFavorites') : t('sidebar.addToFavorites')" @click.stop="favoriteStore.toggle(conn.id)"><Star :size="'0.75rem'" /></button>
+            <button class="conn-more-btn" @click.stop="onConnMoreClick($event, conn)" :title="t('terminal.more')"><MoreHorizontal :size="'0.875rem'" /></button>
           </div>
         </template>
       </template>
@@ -138,14 +175,14 @@
           @dblclick="onItemDblClick(conn)"
           @contextmenu.prevent="onContextMenu($event, conn)"
         >
-          <span class="conn-icon"><component :is="connIcon(conn)" :size="14" /></span>
+          <span class="conn-icon"><component :is="connIcon(conn)" :size="'0.875rem'" /></span>
           <div class="conn-details">
             <span class="name">{{ conn.name }}</span>
             <span class="conn-meta">
               <span class="host">{{ getSubtitle(conn) }}</span>
             </span>
           </div>
-          <button class="conn-more-btn" @click.stop="onConnMoreClick($event, conn)" :title="t('terminal.more')"><MoreHorizontal :size="14" /></button>
+          <button class="conn-more-btn" @click.stop="onConnMoreClick($event, conn)" :title="t('terminal.more')"><MoreHorizontal :size="'0.875rem'" /></button>
         </div>
       </template>
 
@@ -172,7 +209,7 @@
     </div>
     </template>
 
-    <QuickCommandsPanel v-if="activeView === 'quickCommands'" />
+    <QuickCommandsPanel v-if="activeView === 'quickCommands'" ref="quickCommandsRef" />
 
     <TunnelsPanel v-if="activeView === 'tunnels'" />
 
@@ -218,7 +255,7 @@
               </el-option-group>
             </el-select>
             <button class="btn btn-ghost btn-icon btn-sm" :title="t('theme.newTitle')" @click="openThemeEditor()">
-              <Plus :size="14" />
+              <Plus :size="'0.875rem'" />
             </button>
             <button
               v-if="isCustomTheme(settingsStore.settings.terminal.theme)"
@@ -226,7 +263,7 @@
               :title="t('theme.editTitle')"
               @click="openThemeEditor(settingsStore.settings.terminal.theme)"
             >
-              <Pencil :size="14" />
+              <Pencil :size="'0.875rem'" />
             </button>
           </div>
         </div>
@@ -234,7 +271,7 @@
           <div class="persist-label">{{ t('settings.fontPrimary') }}</div>
           <el-select v-model="settingsStore.settings.terminal.fontFamily" @change="settingsStore.save()">
             <template #header>
-              <div style="padding:4px 12px">
+              <div style="padding:0.25rem 0.75rem">
                 <el-checkbox v-model="fontMonoOnly" @click.stop>{{ t('settings.fontMonoOnly') }}</el-checkbox>
               </div>
             </template>
@@ -251,7 +288,7 @@
           <div class="persist-label">{{ t('settings.fontFallback') }}</div>
           <el-select v-model="settingsStore.settings.terminal.fallbackFont" @change="settingsStore.save()">
             <template #header>
-              <div style="padding:4px 12px">
+              <div style="padding:0.25rem 0.75rem">
                 <el-checkbox v-model="fallbackFontMonoOnly" @click.stop>{{ t('settings.fontMonoOnly') }}</el-checkbox>
               </div>
             </template>
@@ -307,90 +344,42 @@
     </Menu>
 
     <!-- Connection context menu -->
-    <Menu ref="menuRef" v-model:visible="menuVisible" @contextmenu.stop>
-      <!-- Terminal -->
-      <MenuItem v-if="selectedConn && selectedConn.type === 'ssh'" @click="doConnect">{{ t('sidebar.connectSSH') }}</MenuItem>
-      <MenuItem v-if="selectedConn && selectedConn.type === 'telnet'" @click="doConnect">{{ t('sidebar.connectTelnet') }}</MenuItem>
-      <MenuItem v-if="selectedConn && selectedConn.type === 'mosh'" @click="doConnect">{{ t('sidebar.connectMosh') }}</MenuItem>
-      <MenuItem v-if="selectedConn && selectedConn.type === 'local'" @click="doConnect">{{ t('sidebar.connectLocal') }}</MenuItem>
-      <MenuItem v-if="selectedConn && selectedConn.type === 'wsl'" @click="doConnect">{{ t('sidebar.connectWsl') }}</MenuItem>
-      <MenuItem v-if="selectedConn && selectedConn.type === 'serial'" @click="emit('connectSerial')">{{ t('sidebar.connectSerial') }}</MenuItem>
-      <MenuItem v-if="selectedConn && selectedConn.type === 'tcp'" @click="doConnect">{{ t('sidebar.connectTcp') }}</MenuItem>
-      <!-- File Transfer -->
-      <MenuItem v-if="selectedConn && selectedConn.type === 'ssh'" @click="doConnectSFTP">{{ t(connectFileMenuKey(selectedConn)) }}</MenuItem>
-      <MenuItem v-if="selectedConn && selectedConn.type === 'wsl'" @click="doConnectWslFile">{{ t('sidebar.connectWslFile') }}</MenuItem>
-      <MenuItem v-if="selectedConn && selectedConn.type === 'ftp'" @click="doConnectFTP">{{ t('sidebar.connectFtp') }}</MenuItem>
-      <MenuItem v-if="selectedConn && selectedConn.type === 'smb'" @click="doConnectSMB">{{ t('sidebar.connectSmb') }}</MenuItem>
-      <MenuItem v-if="selectedConn && selectedConn.type === 's3'" @click="doConnectS3">{{ t('sidebar.connectS3') }}</MenuItem>
-      <MenuItem v-if="selectedConn && selectedConn.type === 'webdav'" @click="doConnectWebDAV">{{ t('sidebar.connectWebdav') }}</MenuItem>
-      <!-- Remote Desktop -->
-      <MenuItem v-if="selectedConn && selectedConn.type === 'rdp'" @click="doConnectRDP">{{ t('sidebar.connectRDP') }}</MenuItem>
-      <MenuItem v-if="selectedConn && selectedConn.type === 'vnc'" @click="doConnectVNC">{{ t('sidebar.connectVNC') }}</MenuItem>
-      <MenuItem v-if="selectedConn && selectedConn.type === 'spice'" @click="doConnectSPICE">{{ t('sidebar.connectSPICE') }}</MenuItem>
-      <MenuItem v-if="selectedConn && selectedConn.type === 'x11-desktop'" @click="doConnectX11Desktop">{{ t('sidebar.connectX11Desktop') }}</MenuItem>
-      <!-- Database & Monitor -->
-      <MenuItem v-if="selectedConn && selectedConn.type === 'database'" @click="doConnectDB">{{ t('db.connectDB') }}</MenuItem>
-      <MenuItem v-if="selectedConn && selectedConn.type === 'k8s'" @click="doConnectK8s">{{ t('sidebar.connectK8s') }}</MenuItem>
-      <MenuItem v-if="selectedConn && selectedConn.type === 'container'" @click="doConnect">{{ t('sidebar.connectContainer') }}</MenuItem>
-      <MenuItem v-if="selectedConn && selectedConn.type === 'ssh'" @click="doConnectMonitor">{{ t('sidebar.connectMonitor') }}</MenuItem>
-      <MenuItem v-if="selectedConn && isConnOpen(selectedConn.id)" @click="doLocateSession">{{ t('sidebar.locateSession') }}</MenuItem>
-      <MenuDivider />
-      <MenuItem :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doEdit()">{{ t('sidebar.edit') }}</MenuItem>
-      <MenuItem @click="doDuplicate">{{ t('sidebar.duplicate') }}</MenuItem>
-      <MenuDivider />
-      <MenuItem @click="doChangeGroup">{{ t('conn.moveTo') }}</MenuItem>
-      <MenuItem @click="doNewGroup(selectedGroupParentId())">{{ t('conn.newGroupTitle') }}</MenuItem>
-      <MenuDivider />
-      <MenuItem class="danger" @click="doDelete">{{ t('sidebar.delete') }}</MenuItem>
-    </Menu>
+    <ConnectionContextMenu
+      ref="menuRef"
+      :config="selectedConn"
+      :targets="ctxTargets"
+      v-model:visible="menuVisible"
+      @connect="onCtxConnect"
+      @connect-to-workspace="onCtxConnectToWorkspace"
+      @edit="doEdit"
+      @change-group="(targets: ConnectionConfig[]) => openChangeGroupFor(targets.map(c => c.id))"
+      @new-group="() => doNewGroup(selectedGroupParentId())"
+      @delete="onCtxDelete"
+    />
 
     <!-- Group context menu -->
-    <Menu ref="groupMenuRef" v-model:visible="groupMenuVisible" @contextmenu.stop>
-      <MenuItem @click="doNewGroup(selectedGroupParentId())">{{ t('conn.newGroupTitle') }}</MenuItem>
-      <MenuItem @click="doNewConnInGroup">{{ t('sidebar.newConnection') }}</MenuItem>
-      <template v-if="selectedGroup && selectedGroup.id !== '__ungrouped__'">
-        <MenuDivider />
-        <MenuItem @click="doRenameGroup">{{ t('conn.renameGroup') }}</MenuItem>
-        <MenuItem @click="doChangeParentGroup">{{ t('conn.moveTo') }}</MenuItem>
-        <MenuDivider />
-        <MenuItem class="danger" @click="doDeleteGroup">{{ t('conn.deleteGroup') }}</MenuItem>
-      </template>
-    </Menu>
+    <GroupContextMenu
+      ref="groupMenuRef"
+      :group="selectedGroup"
+      v-model:visible="groupMenuVisible"
+      @new-group="() => { if (selectedGroup) doNewGroup(selectedGroup.id) }"
+      @new-connection="doNewConnInGroup"
+      @rename="doRenameGroup"
+      @change-parent="doChangeParentGroup"
+      @delete-group="doDeleteGroup"
+    />
 
     <!-- Empty area context menu -->
-    <Menu ref="emptyAreaMenuRef" v-model:visible="emptyAreaMenuVisible" @contextmenu.stop>
+    <Menu ref="emptyAreaMenuRef" v-model:visible="emptyAreaMenuVisible">
       <MenuItem @click="doNewGroup()">{{ t('conn.newGroupTitle') }}</MenuItem>
     </Menu>
 
-    <!-- Delete group dialog -->
-    <el-dialog append-to-body v-model="showDeleteGroupDialog" :title="t('conn.deleteGroupTitle')" width="450px">
-      <p>{{ deleteGroupPromptText }}</p>
-      <template #footer>
-        <el-button @click="showDeleteGroupDialog = false">{{ t('conn.deleteGroupCancel') }}</el-button>
-        <el-button type="warning" @click="confirmDeleteGroup('move-out', 'move-up')">{{ t('conn.deleteGroupMoveUp') }}</el-button>
-        <el-button type="danger" @click="confirmDeleteGroup('delete-connections', 'delete-all')">{{ t('conn.deleteGroupDeleteAll') }}</el-button>
-      </template>
-    </el-dialog>
+    <DeleteGroupDialog v-model:visible="showDeleteGroupDialog" :group="selectedGroup" @confirm="confirmDeleteGroup" />
 
-    <!-- Rename group dialog -->
-    <el-dialog append-to-body v-model="showRenameGroupDialog" :title="t('conn.renameGroup')" width="360px">
-      <el-form @submit.prevent="confirmRenameGroup">
-        <el-form-item :label="t('conn.groupName')">
-          <el-input
-            v-model="renameGroupName"
-            :placeholder="t('conn.groupNamePlaceholder')"
-            @keyup.enter="confirmRenameGroup"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showRenameGroupDialog = false">{{ t('conn.cancel') }}</el-button>
-        <el-button type="primary" @click="confirmRenameGroup">{{ t('conn.save') }}</el-button>
-      </template>
-    </el-dialog>
+    <RenameGroupDialog v-model:visible="showRenameGroupDialog" :name="selectedGroup?.name || ''" @confirm="confirmRenameGroup" />
 
     <!-- Move to dialog -->
-    <el-dialog append-to-body v-model="showChangeGroupDialog" :title="t('conn.group')" width="400px">
+    <el-dialog append-to-body v-model="showChangeGroupDialog" :title="t('conn.group')" width="25rem">
       <el-tree-select
         v-model="changeGroupTargetId"
         :data="groupTreeData"
@@ -406,73 +395,21 @@
       </template>
     </el-dialog>
 
-    <!-- Standalone new group dialog -->
-    <el-dialog append-to-body v-model="showNewGroupDialog" :title="t('conn.newGroupTitle')" width="400px">
-      <el-form label-width="80px" @submit.prevent="confirmNewGroup">
-        <el-form-item :label="t('conn.groupName')">
-          <el-input
-            v-model="newGroupName"
-            :placeholder="t('conn.groupNamePlaceholder')"
-            @keyup.enter="confirmNewGroup"
-          />
-        </el-form-item>
-        <el-form-item :label="t('conn.parentGroup')">
-          <el-tree-select
-            v-model="newGroupParentId"
-            :data="groupTreeData"
-            :render-after-expand="false"
-            check-strictly
-            clearable
-            :placeholder="t('conn.noGroup')"
-            style="width:100%"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showNewGroupDialog = false">{{ t('conn.cancel') }}</el-button>
-        <el-button type="primary" @click="confirmNewGroup">{{ t('conn.save') }}</el-button>
-      </template>
-    </el-dialog>
+    <NewGroupDialog v-model:visible="showNewGroupDialog" :parent-id="newGroupParentId" @confirm="confirmNewGroup" />
 
-    <!-- New group dialog (for change group flow) -->
-    <el-dialog append-to-body v-model="showChangeNewGroupDialog" :title="t('conn.newGroupTitle')" width="400px">
-      <el-form label-width="80px" @submit.prevent="confirmChangeNewGroup">
-        <el-form-item :label="t('conn.groupName')">
-          <el-input
-            v-model="changeNewGroupName"
-            :placeholder="t('conn.groupNamePlaceholder')"
-            @keyup.enter="confirmChangeNewGroup"
-          />
-        </el-form-item>
-        <el-form-item :label="t('conn.parentGroup')">
-          <el-tree-select
-            v-model="changeNewGroupParentId"
-            :data="groupTreeData"
-            :render-after-expand="false"
-            check-strictly
-            clearable
-            :placeholder="t('conn.noGroup')"
-            style="width:100%"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showChangeNewGroupDialog = false">{{ t('conn.cancel') }}</el-button>
-        <el-button type="primary" @click="confirmChangeNewGroup">{{ t('conn.save') }}</el-button>
-      </template>
-    </el-dialog>
+    <NewGroupDialog v-model:visible="showChangeNewGroupDialog" :parent-id="changeNewGroupParentId" @confirm="confirmChangeNewGroup" />
+
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, nextTick, provide } from 'vue'
-import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, Folders, FileUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Laptop, LaptopMinimal, Cable, Pencil, MoreHorizontal, FolderTree, ShipWheel, Boxes, AppWindow, ArrowLeftRight, ArrowRightLeft } from '@lucide/vue'
-import { ElMessageBox } from 'element-plus'
-import { msg } from '../services/message'
+import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Activity, Pencil, MoreHorizontal, FolderTree, ArrowRightLeft, Star } from '@lucide/vue'
+import { getShellLabel as getShellLabelBase } from '../utils/shellLabel'
 import { useConnectionStore } from '../stores/connectionStore'
+import { useFavoriteStore } from '../stores/favoriteStore'
 import type { GroupTreeNode } from '../stores/connectionStore'
 import { usePanelStore } from '../stores/panelStore'
-import { useTabStore } from '../stores/tabStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useI18n } from '../i18n'
 import ConnectionForm from './ConnectionForm.vue'
@@ -488,28 +425,39 @@ import CustomThemeEditor from './CustomThemeEditor.vue'
 import GroupTreeItem from './GroupTreeItem.vue'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
-import MenuSubmenu from './MenuSubmenu.vue'
 import MenuDivider from './MenuDivider.vue'
 import type { ConnectionConfig, ConnectionGroup } from '../types/session'
-import { parseQuickConnect, formatConnSubtitle, getConnectionTypeKey, getTypeCategory, formatTypeFilterLabel, getTypeFilterCatalog, isWindows } from '../utils/quickConnect'
-import { connectFileMenuKey } from '../utils/fileTransferUtils'
+import { parseQuickConnect, formatConnSubtitle, matchTypeFilter } from '../utils/quickConnect'
+import ConnectionContextMenu from './ConnectionContextMenu.vue'
+import { connectionTypeIcon } from '../utils/connectionTypes'
+import GroupContextMenu from './GroupContextMenu.vue'
+import TypeFilterMenu from './TypeFilterMenu.vue'
+import RenameGroupDialog from './RenameGroupDialog.vue'
+import NewGroupDialog from './NewGroupDialog.vue'
+import DeleteGroupDialog from './DeleteGroupDialog.vue'
 import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, FOLLOW_APP_THEME, SIDEBAR_TAB_DEFAULTS, SIDEBAR_TAB_ORDER } from '../types/settings'
 import { formatFontFamily, normalizeFontFamilyValue } from '../utils/formatFontFamily'
 import { useTerminalThemeOptions } from '../composables/useTerminalThemeOptions'
 import { GetAllFonts } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useLocalStateStore } from '../stores/localStateStore'
+import { formatKeyBinding } from '../composables/useKeyboardShortcuts'
 
 defineProps<{
   visible: boolean
 }>()
-const emit = defineEmits(['connect', 'connectOnly', 'connectSftp', 'connectWslFile', 'connectFtp', 'connectSmb', 'connectWebdav', 'connectS3', 'connectRdp', 'connectVnc', 'connectSpice', 'connectX11Desktop', 'connectDB', 'connectMonitor', 'connectSerial', 'connectK8s', 'toggle'])
+const emit = defineEmits(['connect', 'connectToWorkspace', 'connectOnly', 'toggle'])
 const connectionStore = useConnectionStore()
+const favoriteStore = useFavoriteStore()
 const settingsStore = useSettingsStore()
 const panelStore = usePanelStore()
-const tabStore = useTabStore()
 const companionStore = useCompanionStore()
 const { t } = useI18n()
-
+const isMacPlatform = /Mac|iPhone|iPad/.test(navigator.userAgent)
+const quickCommandsTitle = computed(() => {
+  const binding = settingsStore.settings.keyboard.openQuickCommands
+  const shortcut = binding ? formatKeyBinding(binding, isMacPlatform) : ''
+  return shortcut ? `${t('quickCommands.quickCommandsTab')} (${shortcut})` : t('quickCommands.quickCommandsTab')
+})
 // Connection ids that currently have an open panel/session (panel.config.id).
 // Reactive over the panelStore map, so it updates as panels open/close.
 const openPanelConnIds = computed<Set<string>>(() => {
@@ -524,6 +472,12 @@ const showExportDialog = ref(false)
 const showImportDialog = ref(false)
 const editConfig = ref<ConnectionConfig | undefined>(undefined)
 const activeView = ref<'connections' | 'quickCommands' | 'history' | 'personalization' | 'files' | 'monitor' | 'tunnels'>('connections')
+const quickCommandsRef = ref<InstanceType<typeof QuickCommandsPanel> | null>(null)
+
+function openQuickCommands() {
+  activeView.value = 'quickCommands'
+  nextTick(() => quickCommandsRef.value?.focusSearch())
+}
 
 // ── SSH companion: files / monitor folded into this sidebar ──
 function onFilesTabClick() {
@@ -613,9 +567,13 @@ watch(showForm, (val) => {
 const searchQuery = ref('')
 const searchInputRef = ref<any>(null)
 const selectedTypeFilter = ref('all')
+const filterMenuRef = ref<InstanceType<typeof TypeFilterMenu> | null>(null)
 const focusedId = ref<string | null>(null)
 
 function focusSearch() {
+  // The search input only exists in the connections view; switch back first
+  // so the shortcut works no matter which view the sidebar was left in.
+  activeView.value = 'connections'
   nextTick(() => {
     const el = searchInputRef.value?.$el?.querySelector('input')
     if (el instanceof HTMLInputElement) {
@@ -623,82 +581,6 @@ function focusSearch() {
       el.select()
     }
   })
-}
-
-// ── Type filter ──
-const TYPE_LABELS: Record<string, string> = {
-  ssh: 'SSH',
-  telnet: 'Telnet',
-  mosh: 'Mosh',
-  rdp: 'RDP',
-  vnc: 'VNC',
-  spice: 'SPICE',
-  local: 'Local',
-  sftp: 'SFTP',
-  ftp: 'FTP',
-  smb: 'SMB',
-  s3: 'S3',
-  webdav: 'WebDAV',
-  monitor: 'Monitor',
-  k8s: 'Kubernetes',
-  'database:mysql': 'MySQL',
-  'database:postgres': 'PostgreSQL',
-  'database:rqlite': 'rqlite',
-  'database:oracle': 'Oracle',
-  'database:sqlserver': 'SQL Server',
-  'database:redis': 'Redis',
-  'database:mongodb': 'MongoDB',
-  'database:elasticsearch': 'Elasticsearch',
-}
-
-// Label for a filter value (type / `database:<db>` / `container:<runtime>`).
-function filterTypeLabel(key: string): string {
-  return TYPE_LABELS[key] || formatTypeFilterLabel(key)
-}
-
-// Two-level filter menu: categories (in the same order/names as the
-// new-connection form) → concrete types present in connections.
-const filterGroups = computed(() => {
-  const connKeys = new Set(connectionStore.connections.map(c => getConnectionTypeKey(c)))
-  const catalog = getTypeFilterCatalog(t, isWindows)
-  const catalogKeys = new Set(catalog.flatMap(g => g.items.map(i => i.key)))
-
-  // Present-but-uncataloged types (e.g. legacy sftp / monitor that aren't in
-  // the new-connection form) are still filterable, appended under their category.
-  const extras = new Map<string, { key: string; label: string }[]>()
-  for (const k of connKeys) {
-    if (catalogKeys.has(k)) continue
-    const cat = getTypeCategory(k)
-    if (!extras.has(cat)) extras.set(cat, [])
-    extras.get(cat)!.push({ key: k, label: filterTypeLabel(k) })
-  }
-
-  return catalog
-    .map(g => ({
-      key: g.key,
-      label: g.label,
-      items: [...g.items.filter(i => connKeys.has(i.key)), ...(extras.get(g.key) || [])],
-    }))
-    .filter(g => g.items.length > 0)
-})
-
-function matchTypeFilter(conn: ConnectionConfig, filter: string): boolean {
-  if (filter === 'all') return true
-  if (filter.startsWith('database:')) {
-    return conn.type === 'database' && conn.dbType === filter.slice('database:'.length)
-  }
-  if (filter.startsWith('container:')) {
-    return conn.type === 'container' && (conn.containerRuntime || 'docker') === filter.slice('container:'.length)
-  }
-  return conn.type === filter
-}
-
-const showFilterMenu = ref(false)
-const filterMenuRef = ref<InstanceType<typeof Menu> | null>(null)
-
-function onFilterSelect(val: string) {
-  selectedTypeFilter.value = val
-  showFilterMenu.value = false
 }
 
 // ── Expand/collapse state ──
@@ -755,14 +637,9 @@ function filterTreeNode(node: GroupTreeNode, q: string, matchConn: (c: Connectio
 
 const filteredGrouped = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
-  const typeFilter = selectedTypeFilter.value
   const data = connectionStore.groupedConnections
 
-  const matchConn = (c: ConnectionConfig) => {
-    const textMatch = !q || c.name.toLowerCase().includes(q) || c.host.toLowerCase().includes(q)
-    const typeMatch = matchTypeFilter(c, typeFilter)
-    return textMatch && typeMatch
-  }
+  const matchConn = matchesConnFilters
 
   const filteredRoots: GroupTreeNode[] = []
   for (const root of data.roots) {
@@ -774,6 +651,63 @@ const filteredGrouped = computed(() => {
 
   return { roots: filteredRoots, ungrouped: filteredUngrouped }
 })
+
+// Shared search-text + type-filter predicate used by the group tree and the
+// favorites list so both sections filter identically.
+function matchesConnFilters(c: ConnectionConfig): boolean {
+  const q = searchQuery.value.trim().toLowerCase()
+  const textMatch = !q || c.name.toLowerCase().includes(q) || c.host.toLowerCase().includes(q)
+  return textMatch && matchTypeFilter(c, selectedTypeFilter.value)
+}
+
+// ── Favorites (virtual group above all groups) ──
+// Favorites keep their own expand state — they are not a real group, so they
+// are neither persisted to collapsedGroupIds nor touched by the search-mode
+// expand/restore logic.
+const favoritesExpanded = ref(true)
+
+// Resolved favorite connections in saved order; ids of deleted connections
+// are silently dropped (same tolerate-missing policy as recent connections).
+const favoriteConns = computed<ConnectionConfig[]>(() => {
+  return favoriteStore.favoriteIds
+    .map(id => connectionStore.connections.find(c => c.id === id))
+    .filter((c): c is ConnectionConfig => !!c)
+    .filter(matchesConnFilters)
+})
+
+// ── Favorites drag & drop: reorder within the favorites list only ──
+function onFavDragOver(e: DragEvent, conn: ConnectionConfig) {
+  if (!reorderEnabled.value) return
+  const el = e.currentTarget as HTMLElement
+  const rect = el.getBoundingClientRect()
+  const position = (e.clientY - rect.top) < rect.height / 2 ? 'before' : 'after'
+  dropIndicator.value = { id: conn.id, position }
+  dragOverGroupId.value = null
+}
+
+async function onFavDrop(e: DragEvent, conn: ConnectionConfig) {
+  if (!reorderEnabled.value) return
+  const indicator = dropIndicator.value
+  dropIndicator.value = null
+  const raw = e.dataTransfer?.getData('text/plain')
+  if (!raw || !indicator) return
+  try {
+    const data = JSON.parse(raw)
+    if (!Array.isArray(data) || data.length === 0) return
+    let beforeId: string | undefined
+    if (indicator.position === 'before') {
+      beforeId = conn.id
+    } else {
+      // After: insert before the favorite that follows the target
+      const ids = favoriteStore.favoriteIds
+      const idx = ids.indexOf(conn.id)
+      beforeId = idx >= 0 ? ids[idx + 1] : undefined
+    }
+    await favoriteStore.reorder(data, beforeId)
+  } catch {
+    // ignore parse errors
+  }
+}
 
 function countTreeNodes(nodes: GroupTreeNode[]): number {
   let count = 0
@@ -801,6 +735,10 @@ function collectTreeConnIds(nodes: GroupTreeNode[]): string[] {
 watch(filteredGrouped, () => {
   const allIds = collectTreeConnIds(filteredGrouped.value.roots)
   for (const c of filteredGrouped.value.ungrouped) allIds.push(c.id)
+  // Favorites rows are also selectable; they render above the tree
+  if (favoritesExpanded.value) {
+    allIds.unshift(...favoriteConns.value.map(c => c.id))
+  }
 
   if (allIds.length === 0) {
     focusedId.value = searchQuery.value.trim() ? '__new_connection__' : null
@@ -935,6 +873,9 @@ function onResizeStart(e: MouseEvent) {
 // ── Keyboard navigation ──
 function getAllVisibleIds(): string[] {
   const ids: string[] = []
+  if (favoritesExpanded.value) {
+    for (const c of favoriteConns.value) ids.push(c.id)
+  }
   function collectVisible(nodes: GroupTreeNode[]) {
     for (const node of nodes) {
       if (expandedGroups.value.has(node.group.id)) {
@@ -994,19 +935,7 @@ function onListKeydown(e: KeyboardEvent) {
       for (const id of ids) {
         const c = connectionStore.connections.find(c => c.id === id)
         if (c) {
-          if (c.type === 'database') {
-            emit('connectDB', c)
-          } else if (c.type === 'rdp') {
-            emit('connectRdp', c)
-          } else if (c.type === 'vnc') {
-            emit('connectVnc', c)
-          } else if (c.type === 'spice') {
-            emit('connectSpice', c)
-          } else if (c.type === 'x11-desktop') {
-            emit('connectX11Desktop', c)
-          } else {
-            emit('connect', c)
-          }
+          emit('connect', c)
         }
       }
       selectedIds.value = new Set()
@@ -1014,10 +943,6 @@ function onListKeydown(e: KeyboardEvent) {
   }
 }
 
-function findConnById(id: string | null): ConnectionConfig | undefined {
-  if (!id) return undefined
-  return connectionStore.connections.find(c => c.id === id)
-}
 
 // ── Drag & drop ──
 const dragOverGroupId = ref<string | null>(null)
@@ -1252,19 +1177,7 @@ function onLocateConnection(e: Event) {
 
 function onItemDblClick(conn: ConnectionConfig) {
   selectedIds.value = new Set()
-  if (conn.type === 'database') {
-    emit('connectDB', conn)
-  } else if (conn.type === 'rdp') {
-    emit('connectRdp', conn)
-  } else if (conn.type === 'vnc') {
-    emit('connectVnc', conn)
-  } else if (conn.type === 'spice') {
-    emit('connectSpice', conn)
-  } else if (conn.type === 'x11-desktop') {
-    emit('connectX11Desktop', conn)
-  } else {
-    emit('connect', conn)
-  }
+  emit('connect', conn)
 }
 
 // ── Context menu helper ──
@@ -1284,7 +1197,7 @@ function getSelectedConnectionIds(): string[] {
 // ── Connection context menu ──
 const menuVisible = ref(false)
 const selectedConn = ref<ConnectionConfig | null>(null)
-const menuRef = ref<InstanceType<typeof Menu> | null>(null)
+const menuRef = ref<InstanceType<typeof ConnectionContextMenu> | null>(null)
 
 function onContextMenu(e: MouseEvent, conn: ConnectionConfig) {
   e.stopPropagation()
@@ -1312,236 +1225,63 @@ function closeMenu() {
   menuVisible.value = false
 }
 
-function doConnect() {
-  const ids = getSelectedConnectionIds()
-  // Collect connections before any state changes
-  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
-  selectedIds.value = new Set()
-  closeMenu()
-  // Emit sequentially — each onConnect runs async but tabs/panels are created synchronously
-  for (const c of conns) {
-    emit('connect', c)
-  }
-}
 
-function doConnectSFTP() {
-  const ids = getSelectedConnectionIds()
-  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
-  selectedIds.value = new Set()
-  closeMenu()
-  for (const c of conns) {
-    emit('connectSftp', c)
-  }
-}
+
 
 // Open the WSL distro's file manager in a standalone tab (wsl-file session).
-function doConnectWslFile() {
-  const ids = getSelectedConnectionIds()
-  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
-  selectedIds.value = new Set()
-  closeMenu()
-  for (const c of conns) {
-    emit('connectWslFile', c)
-  }
-}
 
-function doConnectFTP() {
-  const ids = getSelectedConnectionIds()
-  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
-  selectedIds.value = new Set()
-  closeMenu()
-  for (const c of conns) {
-    emit('connectFtp', c)
-  }
-}
 
-function doConnectSMB() {
-  const ids = getSelectedConnectionIds()
-  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
-  selectedIds.value = new Set()
-  closeMenu()
-  for (const c of conns) {
-    emit('connectSmb', c)
-  }
-}
 
-function doConnectWebDAV() {
-  const ids = getSelectedConnectionIds()
-  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
-  selectedIds.value = new Set()
-  closeMenu()
-  for (const c of conns) {
-    emit('connectWebdav', c)
-  }
-}
 
-function doConnectS3() {
-  const ids = getSelectedConnectionIds()
-  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
-  selectedIds.value = new Set()
-  closeMenu()
-  for (const c of conns) {
-    emit('connectS3', c)
-  }
-}
 
-function doConnectMonitor() {
-  const ids = getSelectedConnectionIds()
-  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
-  selectedIds.value = new Set()
-  closeMenu()
-  for (const c of conns) {
-    emit('connectMonitor', c)
-  }
-}
 
 // Whether the given connection id currently has an open panel/session.
-function isConnOpen(id: string): boolean {
-  return openPanelConnIds.value.has(id)
-}
 
-// Switch to the existing tab/session hosting this connection instead of opening a new one.
-function doLocateSession() {
-  closeMenu()
-  const id = selectedConn.value?.id
-  if (!id) return
-  for (const p of panelStore.panels.values()) {
-    if (p.config?.id !== id) continue
-    const tab = tabStore.tabs.find(t => t.id === p.tabId)
-    if (!tab) continue
-    tabStore.setActiveTab(tab.id)
-    if (tab.type === 'workspace') {
-      tabStore.setActivePanel(tab.id, p.id)
-    }
-    break
+
+
+
+
+
+
+
+// Resolved multi-select targets for the shared context menu (always includes
+// the right-clicked connection).
+const ctxTargets = computed<ConnectionConfig[]>(() => {
+  const conns = getSelectedConnectionIds()
+    .map(id => connectionStore.connections.find(c => c.id === id))
+    .filter(Boolean) as ConnectionConfig[]
+  if (conns.length > 0) return conns
+  return selectedConn.value ? [selectedConn.value] : []
+})
+
+function onCtxConnect(targets: ConnectionConfig[], kind?: 'file' | 'wsl-file' | 'monitor') {
+  for (const c of targets) {
+    emit('connect', c, kind)
   }
 }
 
-function doConnectRDP() {
-  const ids = getSelectedConnectionIds()
-  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
-  selectedIds.value = new Set()
-  closeMenu()
-  for (const c of conns) {
-    emit('connectRdp', c)
+function onCtxConnectToWorkspace(targets: ConnectionConfig[], workspaceId: string) {
+  for (const c of targets) {
+    if (c.type !== 'ssh') continue
+    emit('connectToWorkspace', { config: c, workspaceId })
   }
 }
 
-function doConnectVNC() {
-  const ids = getSelectedConnectionIds()
-  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
-  selectedIds.value = new Set()
-  closeMenu()
-  for (const c of conns) {
-    emit('connectVnc', c)
-  }
-}
-
-function doConnectSPICE() {
-  const ids = getSelectedConnectionIds()
-  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
-  selectedIds.value = new Set()
-  closeMenu()
-  for (const c of conns) {
-    emit('connectSpice', c)
-  }
-}
-
-function doConnectX11Desktop() {
-  const ids = getSelectedConnectionIds()
-  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
-  selectedIds.value = new Set()
-  closeMenu()
-  for (const c of conns) {
-    emit('connectX11Desktop', c)
-  }
-}
-
-function doConnectDB() {
-  const ids = getSelectedConnectionIds()
-  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
-  selectedIds.value = new Set()
-  closeMenu()
-  for (const c of conns) {
-    emit('connectDB', c)
-  }
-}
-
-function doConnectK8s() {
-  const ids = getSelectedConnectionIds()
-  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
-  selectedIds.value = new Set()
-  closeMenu()
-  for (const c of conns) {
-    emit('connectK8s', c)
-  }
-}
-
-function doEdit() {
-  if (selectedConn.value) {
-    editConfig.value = { ...selectedConn.value }
-    showForm.value = true
-  }
-  closeMenu()
-}
-
-function doDuplicate() {
-  const ids = getSelectedConnectionIds()
-  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
-  selectedIds.value = new Set()
-  closeMenu()
-  for (const c of conns) {
-    const dupName = generateDuplicateName(c.name)
-    const dup: ConnectionConfig = {
-      ...c,
-      id: `conn-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      name: dupName
-    }
-    connectionStore.add(dup)
-  }
-}
-
-function generateDuplicateName(name: string): string {
-  const match = name.match(/^(.*)\s*\((\d+)\)$/)
-  const base = match ? match[1].trim() : name
-  const re = new RegExp('^' + escapeRegex(base) + '\s*\(\d+\)$')
-  let maxNum = 0
-  for (const c of connectionStore.connections) {
-    if (c.name === base || re.test(c.name)) {
-      const m = c.name.match(/\((\d+)\)$/)
-      if (m) {
-        maxNum = Math.max(maxNum, parseInt(m[1], 10))
-      } else {
-        maxNum = Math.max(maxNum, 0)
-      }
-    }
-  }
-  return `${base} (${maxNum + 1})`
-}
-
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-async function doDelete() {
-  closeMenu()
-  const ids = getSelectedConnectionIds()
-  try {
-    await ElMessageBox.confirm(
-      t('sidebar.deleteConfirm', { count: ids.length }),
-      t('sidebar.delete'),
-      { confirmButtonText: t('sftp.dialog.confirm'), cancelButtonText: t('sftp.dialog.cancel'), type: 'warning' }
-    )
-  } catch {
-    return
-  }
-  connectionStore.removeMany(ids)
+function onCtxDelete(targets: ConnectionConfig[]) {
+  connectionStore.removeMany(targets.map(c => c.id))
   selectedIds.value = new Set()
 }
+
+function doEdit(config: ConnectionConfig) {
+  editConfig.value = { ...config }
+  showForm.value = true
+}
+
+
+
 
 // ── Standalone new group ──
 const showNewGroupDialog = ref(false)
-const newGroupName = ref('')
 
 const newConnGroupId = ref<string | undefined>(undefined)
 const newGroupParentId = ref<string | undefined>(undefined)
@@ -1580,7 +1320,6 @@ function doNewGroup(parentGroupId?: string) {
   closeMenu()
   closeGroupMenu()
   closeEmptyAreaMenu()
-  newGroupName.value = ''
   // Clear the parent first, then render the explicitly-passed group. Callers
   // decide what to pass; empty-area creation passes nothing, so it defaults
   // to "None" instead of carrying over a previously-selected group.
@@ -1592,28 +1331,14 @@ function selectedGroupParentId(): string | undefined {
   return (selectedGroup.value && selectedGroup.value.id !== '__ungrouped__') ? selectedGroup.value.id : undefined
 }
 
-async function confirmNewGroup() {
-  const name = newGroupName.value.trim()
-  if (!name) return
-  showNewGroupDialog.value = false
-  const parentId = newGroupParentId.value === '__none__' ? undefined : newGroupParentId.value
-  newGroupParentId.value = undefined
-  newGroupName.value = ''
+async function confirmNewGroup(name: string, parentId: string | undefined) {
   // save in background, don't block dialog close
-  connectionStore.addGroup(name, parentId)
+  await connectionStore.addGroup(name, parentId)
 }
 
 // ── Move to (unified dialog for connections and groups) ──
 const changeDialogMode = ref<'connections' | 'group'>('connections')
 
-function onChangeGroupSelect(value: string | undefined) {
-  if (value === '__new__') {
-    showChangeGroupDialog.value = false
-    changeNewGroupName.value = ''
-    changeNewGroupParentId.value = undefined
-    showChangeNewGroupDialog.value = true
-  }
-}
 
 function doChangeParentGroup() {
   closeMenu()
@@ -1628,7 +1353,6 @@ function doChangeParentGroup() {
 const showChangeGroupDialog = ref(false)
 const changeGroupTargetId = ref<string | undefined>(undefined)
 const showChangeNewGroupDialog = ref(false)
-const changeNewGroupName = ref('')
 const changeNewGroupParentId = ref<string | undefined>(undefined)
 const externalChangeGroupIds = ref<string[]>([])
 
@@ -1656,23 +1380,6 @@ function getChangeGroupIds(): string[] {
   return getSelectedConnectionIds()
 }
 
-function doChangeGroup() {
-  closeMenu()
-  changeDialogMode.value = 'connections'
-  const ids = getSelectedConnectionIds()
-  const groups = new Set(ids.map(id => {
-    const c = connectionStore.connections.find(c => c.id === id)
-    return c?.groupId || '__none__'
-  }))
-  if (groups.size === 1) {
-    const g = [...groups][0]
-    changeGroupTargetId.value = g === '__none__' ? undefined : g
-  } else {
-    changeGroupTargetId.value = undefined
-  }
-  showChangeGroupDialog.value = true
-}
-
 async function confirmChangeGroup() {
   if (changeDialogMode.value === 'group') {
     if (selectedGroup.value && selectedGroup.value.id !== '__ungrouped__') {
@@ -1685,7 +1392,6 @@ async function confirmChangeGroup() {
   const val = changeGroupTargetId.value
   if (val === '__new__') {
     showChangeNewGroupDialog.value = true
-    changeNewGroupName.value = ''
     return
   }
   const groupId = val === '__none__' ? undefined : val
@@ -1697,14 +1403,8 @@ async function confirmChangeGroup() {
   externalChangeGroupIds.value = []
 }
 
-async function confirmChangeNewGroup() {
-  const name = changeNewGroupName.value.trim()
-  if (!name) return
-  showChangeNewGroupDialog.value = false
-  const parentId = changeNewGroupParentId.value === '__none__' ? undefined : changeNewGroupParentId.value
+async function confirmChangeNewGroup(name: string, parentId: string | undefined) {
   const group = await connectionStore.addGroup(name, parentId)
-  changeNewGroupParentId.value = undefined
-  changeNewGroupName.value = ''
   const ids = getChangeGroupIds()
   if (ids.length > 0) {
     connectionStore.setConnectionsGroup(ids, group.id)
@@ -1723,7 +1423,7 @@ watch(showChangeGroupDialog, (open) => {
 // ── Group context menu ──
 const groupMenuVisible = ref(false)
 const selectedGroup = ref<ConnectionGroup | null>(null)
-const groupMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+const groupMenuRef = ref<InstanceType<typeof GroupContextMenu> | null>(null)
 
 function onGroupContextMenu(e: MouseEvent, group: ConnectionGroup) {
   e.stopPropagation()
@@ -1756,31 +1456,20 @@ function onVirtualGroupContextMenu(e: MouseEvent) {
 
 // ── Rename group ──
 const showRenameGroupDialog = ref(false)
-const renameGroupName = ref('')
 
 function doRenameGroup() {
-  closeGroupMenu()
-  renameGroupName.value = selectedGroup.value?.name || ''
+  if (!selectedGroup.value) return
   showRenameGroupDialog.value = true
 }
 
-function confirmRenameGroup() {
-  const name = renameGroupName.value.trim()
-  if (!name || !selectedGroup.value) return
+function confirmRenameGroup(name: string) {
+  if (!selectedGroup.value) return
   connectionStore.renameGroup(selectedGroup.value.id, name)
-  showRenameGroupDialog.value = false
 }
 
 // ── Delete group ──
 const showDeleteGroupDialog = ref(false)
 
-const deleteGroupPromptText = computed(() => {
-  const g = selectedGroup.value
-  if (!g) return ''
-  const connCount = connectionStore.connections.filter(c => c.groupId === g.id).length
-  const childCount = connectionStore.groups.filter(cg => cg.parentId === g.id).length
-  return t('conn.deleteGroupPrompt', { name: g.name, connCount, childCount })
-})
 
 function doDeleteGroup() {
   closeGroupMenu()
@@ -1794,8 +1483,10 @@ function doDeleteGroup() {
   showDeleteGroupDialog.value = true
 }
 
-async function confirmDeleteGroup(connAction: 'delete-connections' | 'move-out', childAction: 'move-up' | 'delete-all' = 'move-up') {
+async function confirmDeleteGroup(connAction: 'delete-connections' | 'move-out') {
   if (selectedGroup.value) {
+    // Deleting the connections too implies deleting nested child groups.
+    const childAction = connAction === 'delete-connections' ? 'delete-all' : 'move-up'
     await connectionStore.deleteGroup(selectedGroup.value.id, connAction, childAction)
   }
   showDeleteGroupDialog.value = false
@@ -1825,8 +1516,6 @@ function onNewConnCommand(cmd: string) {
     } else {
       openNewForm()
     }
-  } else if (cmd === 'new-serial') {
-    emit('connectSerial')
   } else if (cmd === 'new-group') {
     newGroupParentId.value = undefined
     showNewGroupDialog.value = true
@@ -1839,17 +1528,10 @@ function onNewConnCommand(cmd: string) {
 
 
 function getShellLabel(path: string): string {
-  if (!path) return 'Local'
-  const lower = path.toLowerCase()
-  if (lower.startsWith('wsl://')) {
-    const distro = path.slice(6)
-    return distro ? `WSL - ${distro}` : 'WSL'
-  }
-  if (lower.includes('pwsh')) return 'PowerShell'
-  if (lower.includes('powershell')) return 'Windows PowerShell'
-  if (lower.includes('bash')) return 'Git Bash'
-  if (lower.includes('cmd')) return 'Command Prompt'
-  return path.split(/[\\/]/).pop() || path
+  // Shared helper (utils/shellLabel.ts): same labels as the start-page
+  // dropdown, connection form and settings, including the Cygwin/MSYS2
+  // bash.exe disambiguation the inline copy here was missing.
+  return getShellLabelBase(path, 'Local')
 }
 
 function getSubtitle(conn: ConnectionConfig): string {
@@ -1858,30 +1540,7 @@ function getSubtitle(conn: ConnectionConfig): string {
 }
 
 function connIcon(conn: ConnectionConfig) {
-  switch (conn.type) {
-    case 'ssh': return SquareTerminal
-    case 'telnet': return Terminal
-    case 'mosh': return Zap
-    case 'local': return Laptop
-    case 'wsl': return LaptopMinimal
-    case 'serial': return Cable
-    case 'tcp': return ArrowLeftRight
-    case 'sftp': return Folders
-    case 'scp': return FileUp
-    case 'ftp': return FolderUp
-    case 'smb': return HardDrive
-    case 's3': return Cloud
-    case 'webdav': return Globe
-    case 'rdp': return Monitor
-    case 'vnc': return MonitorSmartphone
-    case 'spice': return MonitorCloud
-    case 'x11-desktop': return AppWindow
-    case 'database': return conn.dbType === 'redis' ? DatabaseZap : conn.dbType === 'mongodb' ? Layers : conn.dbType === 'elasticsearch' ? DatabaseSearch : Database
-    case 'monitor': return Activity
-    case 'k8s': return ShipWheel
-    case 'container': return Boxes
-    default: return SquareTerminal
-  }
+  return connectionTypeIcon(conn) || SquareTerminal
 }
 
 
@@ -1918,17 +1577,7 @@ function onConnectFromForm(config: ConnectionConfig) {
   }
   showForm.value = false
   editConfig.value = undefined
-  if (config.type === 'database') {
-    emit('connectDB', config)
-  } else if (config.type === 'rdp') {
-    emit('connectRdp', config)
-  } else if (config.type === 'vnc') {
-    emit('connectVnc', config)
-  } else if (config.type === 'x11-desktop') {
-    emit('connectX11Desktop', config)
-  } else {
-    emit('connect', config)
-  }
+  emit('connect', config)
 }
 
 // ── Lifecycle ──
@@ -1995,7 +1644,7 @@ function openChangeGroupForGroup(groupId: string) {
   showChangeGroupDialog.value = true
 }
 
-defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
+defineExpose({ focusSearch, openQuickCommands, openChangeGroupFor, openChangeGroupForGroup })
 </script>
 
 <style scoped>
@@ -2018,10 +1667,10 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 
 .resize-handle {
   position: absolute;
-  right: -6px;
+  right: -0.375rem;
   top: 0;
   bottom: 0;
-  width: 6px;
+  width: 0.375rem;
   cursor: col-resize;
   z-index: 10;
   background: transparent;
@@ -2045,39 +1694,40 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
   );
 }
 
-/* Hover: 3px accent bar extending into sidebar */
+/* Hover: 0.1875rem accent bar extending into sidebar */
 .resize-handle:hover::after {
   content: '';
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
-  width: 3px;
+  width: 0.1875rem;
   background: var(--accent);
-  box-shadow: 0 0 6px var(--accent-glow);
+  box-shadow: 0 0 0.375rem var(--accent-glow);
 }
 
 .sidebar-header {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 10px 14px;
+  gap: 0.125rem;
+  padding: 0.625rem 0.875rem;
   flex-shrink: 0;
 }
 
 .sidebar-header .icon-btn {
   margin-left: auto;
+  font-size: 0.875rem;
 }
 
 
 .sb-icon-btn {
-  width: 26px;
-  height: 26px;
+  width: 1.625rem;
+  height: 1.625rem;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 4px;
+  border-radius: 0.25rem;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -2093,8 +1743,8 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 1.625rem;
+  height: 1.625rem;
   padding: 0;
   background: transparent;
   border: none;
@@ -2110,8 +1760,9 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 }
 
 .sidebar-tab {
-  width: 26px;
-  height: 26px;
+  font-size: 0.875rem;
+  width: 1.625rem;
+  height: 1.625rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2137,15 +1788,15 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 .search-box {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 10px 6px;
+  gap: 0.25rem;
+  padding: 0 0.625rem 0.375rem;
   flex-shrink: 0;
 }
 
 .connection-list {
   flex: 1;
   overflow-y: auto;
-  padding: 0 8px 8px;
+  padding: 0 0.5rem 0.5rem;
   outline: none;
 }
 
@@ -2153,14 +1804,14 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 .group-header {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 10px 6px 6px;
+  gap: 0.25rem;
+  padding: 0.375rem 0.625rem 0.375rem 0.375rem;
   cursor: pointer;
   user-select: none;
   border-radius: var(--radius-sm);
   transition: background 0.12s ease;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 
@@ -2171,7 +1822,7 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 .group-arrow {
   display: inline-flex;
   align-items: center;
-  width: 16px;
+  width: 1rem;
   color: var(--text-disabled);
 }
 .group-arrow-icon {
@@ -2184,11 +1835,11 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 
 .group-count {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-disabled);
   background: var(--bg-subtle);
-  padding: 0 5px;
-  border-radius: 8px;
+  padding: 0 0.3125rem;
+  border-radius: 0.5rem;
   flex-shrink: 0;
 }
 
@@ -2201,12 +1852,12 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 .connection-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
+  gap: 0.375rem;
+  padding: 0.5rem 0.625rem;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.12s ease;
-  margin-bottom: 2px;
+  margin-bottom: 0.125rem;
   user-select: none;
   position: relative;
 }
@@ -2215,9 +1866,9 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 .connection-item.drop-after::after {
   content: '';
   position: absolute;
-  left: 6px;
-  right: 6px;
-  height: 2px;
+  left: 0.375rem;
+  right: 0.375rem;
+  height: 0.125rem;
   background: var(--accent);
   border-radius: 1px;
   z-index: 2;
@@ -2227,7 +1878,7 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 .connection-item.drop-after::after { bottom: -1px; }
 
 .connection-item.indented {
-  padding-left: 24px;
+  padding-left: 1.5rem;
 }
 
 .connection-item:hover {
@@ -2252,15 +1903,15 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
   display: none;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 1.5rem;
+  height: 1.5rem;
   border: none;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
-  margin-left: auto;
+  margin-left: 0;
   padding: 0;
 }
 .connection-item:hover .conn-more-btn {
@@ -2271,11 +1922,48 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
   color: var(--text-primary);
 }
 
+/* Favorite toggle: always reserves its slot and sits at the right edge so
+   rows align; revealed on hover and while favorited */
+.conn-fav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.connection-item:hover .conn-fav-btn,
+.conn-fav-btn.on {
+  opacity: 1;
+  pointer-events: auto;
+}
+.conn-fav-btn.on {
+  color: var(--warning);
+}
+/* Inside the favorites group: hover reveals the star already lit */
+.conn-fav-btn.lit,
+.conn-fav-btn.lit:hover {
+  color: var(--warning);
+}
+.conn-fav-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
 .conn-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
+  width: 1rem;
   flex-shrink: 0;
   color: var(--text-muted);
 }
@@ -2283,13 +1971,13 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 .conn-details {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
   min-width: 0;
 }
 
 .name {
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
@@ -2300,7 +1988,7 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 
 .host {
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -2311,14 +1999,14 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 .conn-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   min-width: 0;
 }
 
 .empty-state {
-  padding: 32px 16px;
+  padding: 2rem 1rem;
   text-align: center;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-disabled);
   font-family: var(--font-ui);
 }
@@ -2334,7 +2022,7 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
   cursor: pointer;
   color: var(--text-muted);
   transition: color 0.12s ease;
-  padding: 2px;
+  padding: 0.125rem;
   border-radius: var(--radius-sm);
 }
 
@@ -2354,32 +2042,32 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 
 /* ── Personalization panel ── */
 .personalization-panel {
-  padding: 16px;
+  padding: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 1rem;
 }
 
 .persist-section-title {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   font-family: var(--font-ui);
   color: var(--text-secondary);
-  padding: 0 0 4px 0;
-  margin-bottom: -4px;
+  padding: 0 0 0.25rem 0;
+  margin-bottom: -0.25rem;
 }
 
 .persist-section {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0.25rem;
 }
 
 .persist-label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-family: var(--font-ui);
   color: var(--text-muted);
-  padding-left: 2px;
+  padding-left: 0.125rem;
 }
 
 .persist-section .el-select,
@@ -2390,7 +2078,7 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 .theme-select-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
 }
 
 .theme-select-row .el-select {
@@ -2399,10 +2087,10 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 }
 
 .tree-option {
-  padding: 6px 12px;
+  padding: 0.375rem 0.75rem;
   cursor: pointer;
-  font-size: 13px;
-  border-radius: 4px;
+  font-size: 0.8125rem;
+  border-radius: 0.25rem;
 }
 .tree-option:hover {
   background: var(--bg-hover);
@@ -2415,13 +2103,13 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 
 <style>
 .theme-select-popper .el-select-group__title {
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-disabled);
   text-align: center;
-  padding: 6px 12px 2px;
+  padding: 0.375rem 0.75rem 0.125rem;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .theme-select-popper .el-select-group__title::before,
 .theme-select-popper .el-select-group__title::after {

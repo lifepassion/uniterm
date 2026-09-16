@@ -10,10 +10,10 @@
             :placeholder="t('db.searchTables')"
           />
           <button class="btn btn-ghost btn-icon btn-sm" :title="t('mongodb.refresh')" @click="refreshDatabases">
-            <RefreshCw :size="14" />
+            <RefreshCw :size="'0.875rem'" />
           </button>
           <button class="btn btn-ghost btn-icon btn-sm" :title="t('common.more')" @click.stop="moreMenuRef?.toggle($event.currentTarget)">
-            <MoreHorizontal :size="14" />
+            <MoreHorizontal :size="'0.875rem'" />
           </button>
           <Menu ref="moreMenuRef" v-model:visible="moreMenuVisible" align="end">
             <MenuItem @click="onMoreNewCollection">{{ t('mongodb.newCollection') }}</MenuItem>
@@ -33,9 +33,9 @@
                 @contextmenu.prevent="onDbContextMenu($event, db)"
               >
                 <span class="db-arrow" @click.stop="toggleDb(db)">
-                  <component :is="expandedDbs.has(db) ? ChevronDown : ChevronRight" :size="12" />
+                  <component :is="expandedDbs.has(db) ? ChevronDown : ChevronRight" :size="'0.75rem'" />
                 </span>
-                <Database :size="14" class="db-icon" />
+                <Database :size="'0.875rem'" class="db-icon" />
                 <span class="db-name">{{ db }}</span>
               </div>
               <div v-if="expandedDbs.has(db)" class="child-list">
@@ -48,7 +48,7 @@
                   @contextmenu.prevent="onColContextMenu($event, db, col)"
                 >
                   <span class="table-icon-spacer" />
-                  <Layers :size="14" class="table-icon" />
+                  <Layers :size="'0.875rem'" class="table-icon" />
                   <span class="table-name">{{ col }}</span>
                 </div>
                 <div v-if="!collections[db] || collections[db].length === 0" class="empty-hint">
@@ -90,7 +90,7 @@
                   @dragend="clearTabDragState"
                   @drop.prevent="onTabDrop($event, index)"
                 >
-                  <component :is="tab.kind === 'collection' ? Layers : Database" :size="12" class="tab-icon" />
+                  <component :is="tab.kind === 'collection' ? Layers : Database" :size="'0.75rem'" class="tab-icon" />
                   <span class="tab-title">{{ tabTitle(tab) }}</span>
                   <button class="tab-close" :title="t('db.tabClose')" @click.stop="closeTab(tab.id)">×</button>
                 </div>
@@ -103,7 +103,7 @@
               :title="t('tab.more')"
               @click.stop="moreTabsMenuRef?.toggle($event.currentTarget)"
             >
-              <MoreHorizontal :size="14" />
+              <MoreHorizontal :size="'0.875rem'" />
             </button>
             <Menu ref="moreTabsMenuRef" v-model:visible="moreTabsMenuVisible" align="end">
               <MenuItem
@@ -141,7 +141,7 @@
                   :placeholder="t('db.searchTables')"
                 />
                 <button class="btn btn-default btn-sm" @click="onObjectsNewCollection(tab.dbName)">
-                  <Plus :size="14" /> {{ t('mongodb.newCollection') }}
+                  <Plus :size="'0.875rem'" /> {{ t('mongodb.newCollection') }}
                 </button>
               </div>
               <el-table
@@ -152,22 +152,22 @@
                 class="db-result-table"
                 :empty-text="t('db.noData')"
               >
-                <el-table-column :label="t('mongodb.collection')" min-width="240" show-overflow-tooltip>
+                <el-table-column :label="t('mongodb.collection')" :min-width="uiPx(240)" show-overflow-tooltip>
                   <template #default="{ row }">
                     <span class="object-name" @click="openCollectionTab(tab.dbName, row)">
-                      <Layers :size="14" class="object-icon" />
+                      <Layers :size="'0.875rem'" class="object-icon" />
                       {{ row }}
                     </span>
                   </template>
                 </el-table-column>
-                <el-table-column :label="t('common.actions')" width="80" align="right">
+                <el-table-column :label="t('common.actions')" :width="uiPx(80)" align="right">
                   <template #default="{ row }">
                     <button
                       class="btn btn-ghost btn-icon btn-sm danger"
                       :title="t('mongodb.dropCollection')"
                       @click.stop="onCtxDropCollection({ db: tab.dbName, col: row } as CtxMenuData)"
                     >
-                      <Trash2 :size="14" />
+                      <Trash2 :size="'0.875rem'" />
                     </button>
                   </template>
                 </el-table-column>
@@ -225,9 +225,9 @@
     <el-dialog append-to-body
       v-model="newColDialogVisible"
       :title="t('mongodb.newCollection')"
-      width="380px"
+      width="23.75rem"
     >
-      <el-form label-width="80px">
+      <el-form label-width="5rem">
         <el-form-item :label="t('mongodb.collection')">
           <el-input v-model="newColName" :placeholder="t('mongodb.collection')" />
         </el-form-item>
@@ -246,8 +246,8 @@
     </el-dialog>
 
     <!-- New Database dialog -->
-    <el-dialog append-to-body v-model="newDbDialogVisible" :title="t('db.newDatabase')" width="380px">
-      <el-form label-width="80px">
+    <el-dialog append-to-body v-model="newDbDialogVisible" :title="t('db.newDatabase')" width="23.75rem">
+      <el-form label-width="5rem">
         <el-form-item :label="t('db.databases')">
           <el-input v-model="newDbName" :placeholder="t('db.databases')" />
         </el-form-item>
@@ -271,6 +271,7 @@ import { Database, Layers, ChevronRight, ChevronDown, RefreshCw, MoreHorizontal,
 import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 import { msg } from '../services/message'
+import { uiPx } from '../utils/uiScale'
 import {
   MongoListDatabases,
   MongoListCollections,
@@ -802,7 +803,7 @@ watch(() => props.sessionId, () => {
 }
 
 .mongo-resizer {
-  width: 4px;
+  width: 0.25rem;
   cursor: col-resize;
   background: transparent;
   flex-shrink: 0;
@@ -823,20 +824,20 @@ watch(() => props.sessionId, () => {
 .search-wrap {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
   flex-shrink: 0;
 }
 .search-input {
   flex: 1;
   min-width: 0;
-  padding: 4px 8px;
+  padding: 0.25rem 0.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   outline: none;
   transition: border-color 0.15s ease;
 }
@@ -853,17 +854,17 @@ watch(() => props.sessionId, () => {
   overflow: auto;
 }
 .tree-loading {
-  padding: 12px;
+  padding: 0.75rem;
   color: var(--text-secondary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   text-align: center;
 }
 .db-header {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
+  gap: 0.25rem;
+  padding: 0.375rem 0.5rem;
   cursor: pointer;
   user-select: none;
   transition: background 0.12s ease;
@@ -875,7 +876,7 @@ watch(() => props.sessionId, () => {
   background: var(--bg-hover);
 }
 .db-arrow {
-  width: 12px;
+  width: 0.75rem;
   flex-shrink: 0;
   color: var(--text-muted);
   display: flex;
@@ -890,7 +891,7 @@ watch(() => props.sessionId, () => {
 }
 .db-name {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -900,8 +901,8 @@ watch(() => props.sessionId, () => {
 .table-item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
+  gap: 0.25rem;
+  padding: 0.375rem 0.5rem;
   cursor: pointer;
   user-select: none;
   transition: background 0.12s ease;
@@ -913,7 +914,7 @@ watch(() => props.sessionId, () => {
   background: var(--bg-hover);
 }
 .table-icon-spacer {
-  width: 30px;
+  width: 1.875rem;
   flex-shrink: 0;
 }
 .table-icon {
@@ -922,16 +923,16 @@ watch(() => props.sessionId, () => {
 }
 .table-name {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .empty-hint {
-  padding: 4px 8px 4px 28px;
+  padding: 0.25rem 0.5rem 0.25rem 1.75rem;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 
@@ -942,7 +943,7 @@ watch(() => props.sessionId, () => {
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-elevated);
   flex-shrink: 0;
-  min-height: 32px;
+  min-height: 2rem;
 }
 .mongo-tab-scroll {
   display: flex;
@@ -951,25 +952,25 @@ watch(() => props.sessionId, () => {
   flex: 1;
   min-width: 0;
 }
-.mongo-tab-scroll::-webkit-scrollbar { height: 4px; }
+.mongo-tab-scroll::-webkit-scrollbar { height: 0.25rem; }
 .mongo-tab-indicator {
-  width: 2px;
-  min-width: 2px;
+  width: 0.125rem;
+  min-width: 0.125rem;
   align-self: stretch;
   background: var(--accent);
   opacity: 0.8;
-  margin: 4px 0;
+  margin: 0.25rem 0;
 }
 .mongo-tab-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  max-width: 180px;
-  padding: 6px 8px 6px 12px;
+  gap: 0.375rem;
+  max-width: 11.25rem;
+  padding: 0.375rem 0.5rem 0.375rem 0.75rem;
   border-right: 1px solid var(--border-subtle);
   cursor: pointer;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   white-space: nowrap;
   flex-shrink: 0;
@@ -982,20 +983,20 @@ watch(() => props.sessionId, () => {
 .mongo-tab-item.active {
   background: var(--bg-base);
   color: var(--text-primary);
-  box-shadow: inset 0 -2px 0 var(--accent);
+  box-shadow: inset 0 -0.125rem 0 var(--accent);
 }
 .tab-icon { flex-shrink: 0; opacity: 0.8; }
 .tab-title { overflow: hidden; text-overflow: ellipsis; }
 .tab-close {
-  width: 16px;
-  height: 16px;
-  line-height: 14px;
+  width: 1rem;
+  height: 1rem;
+  line-height: 0.875rem;
   border: none;
   background: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 14px;
-  border-radius: 3px;
+  font-size: 0.875rem;
+  border-radius: 0.1875rem;
   flex-shrink: 0;
 }
 .tab-close:hover {
@@ -1003,7 +1004,7 @@ watch(() => props.sessionId, () => {
   background: var(--bg-hover);
 }
 .mongo-tab-more {
-  width: 28px;
+  width: 1.75rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1031,34 +1032,34 @@ watch(() => props.sessionId, () => {
 .mongo-objects {
   flex: 1;
   overflow: auto;
-  padding: 12px;
+  padding: 0.75rem;
   display: flex;
   flex-direction: column;
 }
 .mongo-objects-header {
-  margin-bottom: 8px;
+  margin-bottom: 0.5rem;
 }
 .mongo-objects-title {
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary);
 }
 .object-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 .object-search {
-  width: 240px;
-  padding: 4px 8px;
+  width: 15rem;
+  padding: 0.25rem 0.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   outline: none;
 }
 .object-search:focus { border-color: var(--accent); }
@@ -1066,7 +1067,7 @@ watch(() => props.sessionId, () => {
 .object-name {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   cursor: pointer;
   transition: color 0.15s ease;
 }
@@ -1084,7 +1085,7 @@ watch(() => props.sessionId, () => {
   --el-table-header-text-color: var(--text-secondary);
   --el-table-text-color: var(--text-primary);
   --el-table-bg-color: var(--bg-surface);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 /* ── Placeholder ── */
@@ -1095,7 +1096,7 @@ watch(() => props.sessionId, () => {
   justify-content: center;
   color: var(--text-secondary);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 </style>

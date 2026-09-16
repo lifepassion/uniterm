@@ -54,11 +54,11 @@ function onMouseDown(e: MouseEvent) {
   background: var(--accent);
 }
 .panel-splitter.horizontal {
-  width: 4px;
+  width: 0.25rem;
   cursor: col-resize;
 }
 .panel-splitter.vertical {
-  height: 4px;
+  height: 0.25rem;
   cursor: row-resize;
 }
 </style>

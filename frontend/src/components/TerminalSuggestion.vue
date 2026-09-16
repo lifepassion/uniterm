@@ -17,8 +17,8 @@
         @mouseenter="onHover(index)"
       >
         <span class="suggestion-desc">
-          <el-icon v-if="item.type === 'quick-command'"><Zap :size="12" /></el-icon>
-          <el-icon v-else-if="item.type === 'history'"><Clock :size="12" /></el-icon>
+          <el-icon v-if="item.type === 'quick-command'"><Zap :size="'0.75rem'" /></el-icon>
+          <el-icon v-else-if="item.type === 'history'"><Clock :size="'0.75rem'" /></el-icon>
         </span>
         <span v-if="item.type === 'quick-command' && item.label !== item.value" class="suggestion-label">
           <span class="qc-name">
@@ -37,7 +37,7 @@
             <span :class="{ 'match-char': item.matchIndices?.includes(charIdx) }">{{ char }}</span>
           </template>
         </span>
-        <button class="delete-btn" :class="{ visible: item.type === 'history' }" @click.stop="onRemove(item.id)"><Trash2 :size="12" /></button>
+        <button class="delete-btn" :class="{ visible: item.type === 'history' }" @click.stop="onRemove(item.id)"><Trash2 :size="'0.75rem'" /></button>
       </div>
     </div>
     <!-- AI section (fixed at bottom) -->
@@ -53,7 +53,7 @@
       @mouseenter="onHover(aiItemWithIndex.index)"
     >
       <span class="suggestion-desc">
-        <el-icon><Sparkles :size="12" /></el-icon>
+        <el-icon><Sparkles :size="'0.75rem'" /></el-icon>
       </span>
       <span class="suggestion-label">{{ aiItemWithIndex.item.label }}</span>
     </div>
@@ -230,9 +230,9 @@ function onRemove(id: string) {
 .terminal-suggestion-popup {
   position: fixed;
   z-index: 100;
-  min-width: 200px;
-  max-width: 400px;
-  max-height: 200px;
+  min-width: 12.5rem;
+  max-width: 25rem;
+  max-height: 12.5rem;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -240,22 +240,22 @@ function onRemove(id: string) {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(0.5rem);
 }
 
 .history-list {
   overflow-y: auto;
   flex: 1;
   min-height: 0;
-  padding: 4px 0 0 0;
+  padding: 0.25rem 0 0 0;
 }
 
 .suggestion-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  font-size: 13px;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
   font-family: var(--font-mono);
   color: var(--text-secondary);
   cursor: pointer;
@@ -270,7 +270,7 @@ function onRemove(id: string) {
 }
 
 .suggestion-item.ai-result {
-  border-left: 3px solid var(--success);
+  border-left: 0.1875rem solid var(--success);
 }
 
 .suggestion-item.ai-preview {
@@ -280,12 +280,12 @@ function onRemove(id: string) {
 .ai-fixed {
   flex-shrink: 0;
   border-top: 1px solid var(--border-subtle);
-  padding-top: 8px;
+  padding-top: 0.5rem;
   background: var(--bg-surface);
 }
 
 .suggestion-icon {
-  font-size: 12px;
+  font-size: 0.75rem;
   opacity: 0.7;
 }
 
@@ -298,14 +298,14 @@ function onRemove(id: string) {
 
 .suggestion-label .qc-name {
   display: block;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary);
   line-height: 1.3;
 }
 
 .suggestion-label .qc-cmd {
   display: block;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   font-family: var(--font-mono);
   line-height: 1.3;
@@ -320,26 +320,26 @@ function onRemove(id: string) {
 }
 
 .suggestion-desc {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   font-family: var(--font-ui);
 }
 
 .delete-btn {
   display: flex;
-  width: 16px;
-  height: 16px;
+  width: 1rem;
+  height: 1rem;
   align-items: center;
   justify-content: center;
   background: transparent;
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1;
-  border-radius: 2px;
+  border-radius: 0.125rem;
   padding: 0;
-  margin-left: 2px;
+  margin-left: 0.125rem;
   flex-shrink: 0;
   visibility: hidden;
   opacity: 0;
@@ -357,7 +357,7 @@ function onRemove(id: string) {
 }
 
 .history-list::-webkit-scrollbar {
-  width: 6px;
+  width: 0.375rem;
 }
 
 .history-list::-webkit-scrollbar-track {
@@ -366,6 +366,6 @@ function onRemove(id: string) {
 
 .history-list::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: 3px;
+  border-radius: 0.1875rem;
 }
 </style>

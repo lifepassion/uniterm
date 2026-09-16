@@ -3,7 +3,7 @@
     append-to-body
     :model-value="visible"
     :title="t('sftp.changePermission')"
-    width="400px"
+    width="25rem"
     :close-on-click-modal="false"
     @update:model-value="(v: boolean) => emit('update:visible', v)"
     @closed="onClosed"
@@ -12,7 +12,7 @@
       <span class="chmod-filename">{{ name }}</span>
       <span v-if="owner || group" class="chmod-ownergroup">{{ owner || '-' }}:{{ group || '-' }}</span>
     </div>
-    <el-form class="chmod-form" label-width="80px">
+    <el-form class="chmod-form" label-width="5rem">
       <el-form-item label="Owner">
         <el-checkbox v-model="ownerR">Read</el-checkbox>
         <el-checkbox v-model="ownerW">Write</el-checkbox>
@@ -125,32 +125,32 @@ function close(ok: boolean) {
 <style scoped>
 .chmod-file-info {
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: 1rem;
 }
 .chmod-filename {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-mono, monospace);
 }
 .chmod-ownergroup {
   display: block;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-disabled);
-  margin-top: 2px;
+  margin-top: 0.125rem;
 }
 .chmod-form {
-  margin-top: 4px;
+  margin-top: 0.25rem;
 }
 .chmod-form .el-form-item {
-  margin-bottom: 12px;
+  margin-bottom: 0.75rem;
 }
 .chmod-octal-input {
-  width: 120px;
+  width: 7.5rem;
 }
 .chmod-octal-input :deep(.el-input__inner) {
   font-family: var(--font-mono, monospace);
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 0.125rem;
 }
 </style>

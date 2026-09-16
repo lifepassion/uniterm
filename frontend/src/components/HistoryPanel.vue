@@ -26,13 +26,13 @@
         <span class="history-command">{{ entry.command }}</span>
         <div v-if="selectedIds.size <= 1 && (selectedIds.has(entry.id) || hoveredId === entry.id)" class="qc-item-actions">
           <button class="btn btn-ghost btn-icon btn-sm run" @click.stop="runCommand(entry)" :title="t('quickCommands.run')">
-            <Play :size="14" />
+            <Play :size="'0.875rem'" />
           </button>
           <button class="btn btn-ghost btn-icon btn-sm paste" @click.stop="pasteCommand(entry)" :title="t('quickCommands.paste')">
-            <Clipboard :size="14" />
+            <Clipboard :size="'0.875rem'" />
           </button>
           <button class="btn btn-ghost btn-icon btn-sm" @click.stop="copyCommand(entry)" :title="t('quickCommands.copy')">
-            <Copy :size="14" />
+            <Copy :size="'0.875rem'" />
           </button>
         </div>
       </div>
@@ -69,8 +69,7 @@ import { Play, Clipboard, Copy } from '@lucide/vue'
 import { useSuggestions, type HistoryEntry } from '../composables/useSuggestions'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
-import { useQuickCommandStore } from '../stores/quickCommandStore'
-import { SessionWrite } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { queuedSessionWrite } from '../services/sessionWriter'
 import { useI18n } from '../i18n'
 import { msg } from '../services/message'
 import { focusActivePanelTerminal } from '../composables/useFocusTerminal'
@@ -83,7 +82,6 @@ const { t } = useI18n()
 const suggestions = useSuggestions()
 const tabStore = useTabStore()
 const panelStore = usePanelStore()
-const qcStore = useQuickCommandStore()
 
 const searchQuery = ref('')
 const selectedIds = ref<Set<string>>(new Set())
@@ -207,7 +205,7 @@ function runCommand(entry: HistoryEntry) {
   if (sids.length === 0) return
   const text = entry.command.endsWith('\n') ? entry.command : entry.command + '\n'
   for (const sid of sids) {
-    SessionWrite(sid, text)
+    queuedSessionWrite(sid, text)
   }
   // Return focus to the terminal (issue #285).
   focusActivePanelTerminal()
@@ -217,7 +215,7 @@ function pasteCommand(entry: HistoryEntry) {
   const sids = getTargetSessionIds()
   if (sids.length === 0) return
   for (const sid of sids) {
-    SessionWrite(sid, entry.command)
+    queuedSessionWrite(sid, entry.command)
   }
   // Return focus to the terminal (issue #285).
   focusActivePanelTerminal()
@@ -282,14 +280,14 @@ watch(searchQuery, () => {
 .qc-tooltip {
   position: fixed;
   z-index: 10000;
-  max-width: 480px;
-  padding: 6px 10px;
+  max-width: 30rem;
+  padding: 0.375rem 0.625rem;
   font-family: var(--font-mono, 'Consolas', 'Courier New', monospace);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-primary);
   background: var(--bg-overlay);
   border: 1px solid var(--border-subtle);
-  border-radius: 4px;
+  border-radius: 0.25rem;
   box-shadow: var(--shadow-md);
   pointer-events: none;
   white-space: pre-wrap;
@@ -300,7 +298,7 @@ watch(searchQuery, () => {
 .history-command {
   flex: 1;
   font-family: var(--font-mono, 'Consolas', 'Courier New', monospace);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -310,8 +308,8 @@ watch(searchQuery, () => {
 .qc-toolbar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 10px 6px;
+  gap: 0.25rem;
+  padding: 0 0.625rem 0.375rem;
   flex-shrink: 0;
 }
 
@@ -320,19 +318,19 @@ watch(searchQuery, () => {
 .qc-list {
   flex: 1;
   overflow-y: auto;
-  padding: 0 8px 8px;
+  padding: 0 0.5rem 0.5rem;
 }
 
 .qc-item {
   display: flex;
   align-items: center;
-  padding: 6px 10px;
-  gap: 10px;
-  min-height: 36px;
+  padding: 0.375rem 0.625rem;
+  gap: 0.625rem;
+  min-height: 2.25rem;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.12s ease;
-  margin-bottom: 2px;
+  margin-bottom: 0.125rem;
   user-select: none;
 }
 
@@ -347,15 +345,15 @@ watch(searchQuery, () => {
 
 .qc-item-actions {
   display: flex;
-  gap: 2px;
+  gap: 0.125rem;
   flex-shrink: 0;
 }
 
 .qc-empty {
-  padding: 24px 12px;
+  padding: 1.5rem 0.75rem;
   text-align: center;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 </style>

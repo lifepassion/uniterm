@@ -31,7 +31,7 @@
       <span v-else-if="!isActive && hasNotification && !tab.locked" class="tab-notification-dot" />
     </span>
     <span v-if="!editing" class="tab-name" :class="{ 'tab-disconnected': isDisconnected }" :title="tab.name" @dblclick.stop="startEdit">
-      <ArrowDownUp v-if="hasActiveTransfers" class="transfer-indicator" :size="14" title="Transferring..." />
+      <ArrowDownUp v-if="hasActiveTransfers" class="transfer-indicator" :size="'0.875rem'" title="Transferring..." />
       <span class="tab-name-text">{{ tab.name }}</span>
     </span>
     <input
@@ -44,10 +44,11 @@
       @blur="confirmEdit"
       @click.stop
     />
+    <span v-if="tabShortcut" class="tab-shortcut">{{ tabShortcut }}</span>
     <Radio
       v-if="showBroadcastIcon"
       class="tab-broadcast-icon"
-      :size="14"
+      :size="'0.875rem'"
       :title="t('tab.unbroadcast')"
     />
     <button
@@ -56,7 +57,7 @@
       :class="{ 'tab-close-right-ghost': !hovered || tab.locked }"
       @click.stop="$emit('close', tab.id)"
     ><X /></button>
-    <Menu ref="ctxMenuRef" root-class="right-shortcuts" v-model:visible="ctxMenuVisible" v-slot="{ current }">
+    <Menu ref="ctxMenuRef" v-model:visible="ctxMenuVisible">
       <!-- ① 标签类操作 -->
       <MenuItem v-if="canDuplicate" :shortcut="menuShortcut('duplicateSession')" @click="onDuplicate">
         {{ t('tab.duplicate') }}
@@ -94,6 +95,7 @@
       <MenuItem v-if="isSsh" @click="openSftp">{{ t(fileMenuKey) }}</MenuItem>
       <MenuItem v-if="isSsh" @click="uploadFileRz">{{ t('terminal.uploadFileRz') }}</MenuItem>
       <MenuItem v-if="isSsh" @click="openMonitor">{{ t('sidebar.connectMonitor') }}</MenuItem>
+      <MenuItem v-if="isSftpOverSsh" @click="openTerminal">{{ t('tab.openTerminal') }}</MenuItem>
 
       <!-- ④ 关闭标签操作 -->
       <MenuDivider />
@@ -112,7 +114,8 @@ import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useSettingsStore } from '../stores/settingsStore'
-import { formatKeyBinding } from '../composables/useKeyboardShortcuts'
+import { useCompanionStore } from '../stores/companionStore'
+import { formatKeyBinding, tabDigitShortcutPrefix, formatDigitShortcut } from '../composables/useKeyboardShortcuts'
 import type { ShortcutAction } from '../types/settings'
 import { useK8sStore } from '../stores/k8sStore'
 import { useContainerStore } from '../stores/containerStore'
@@ -127,16 +130,17 @@ import {
 import { msg } from '../services/message'
 import type { TerminalTab, SettingsTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, WorkspaceTab } from '../types/workspace'
 import { connectFileMenuKey, fileTransferProto } from '../utils/fileTransferUtils'
-import type { ConnectionConfig } from '../types/session'
+import { connectionTypeIconOfKind } from '../utils/connectionTypes'
 import { useDuplicateSession } from '../composables/useDuplicateSession'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
 import MenuDivider from './MenuDivider.vue'
 import { Clipboard } from '@wailsio/runtime'
-import { SquareTerminal, Laptop, LaptopMinimal, FolderUp, FolderOpen, Folders, FileUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow, ArrowLeftRight, Radio } from '@lucide/vue'
+import { SquareTerminal, FolderUp, X, ArrowDownUp, Lock, Radio } from '@lucide/vue'
 
 const props = defineProps<{
   tab: TerminalTab | SettingsTab | SFTPTab | RDPTab | VNCTab | SPICETab | DBTab | MonitorTab | WorkspaceTab
+  shortcutIndex?: number
   isActive: boolean
   hasNotification?: boolean
   showClose?: boolean
@@ -155,10 +159,18 @@ const sessionStore = useSessionStore()
 const k8sStore = useK8sStore()
 const containerStore = useContainerStore()
 const settingsStore = useSettingsStore()
+const companionStore = useCompanionStore()
 const { duplicateSession } = useDuplicateSession()
 const { t } = useI18n()
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent)
+const tabShortcut = computed(() => {
+  if (!props.shortcutIndex || props.shortcutIndex > 9) return ''
+  // Cmd+N on macOS / Ctrl+N elsewhere by default, or the user-configured
+  // keyboard.tabSwitchModifier combo — always the real binding.
+  const prefix = tabDigitShortcutPrefix(isMac, settingsStore.settings.keyboard.tabSwitchModifier)
+  return formatDigitShortcut(prefix, props.shortcutIndex, isMac)
+})
 
 // Human-readable keybinding for a shortcut action ('' when unset), shown as a
 // hint in the tab right-click context menu. Reactive via settingsStore, so the
@@ -183,49 +195,22 @@ const editInputRef = ref<HTMLInputElement>()
 
 const tabIcon = computed(() => {
   const t = props.tab
-  if (t.type === 'settings') return Settings
+  // The file browser tab's icon follows the panel's backing config (an SSH
+  // connection's companion panel honors the SFTP/SCP protocol preference),
+  // so it must be resolved before the plain tab-type lookup below.
   if (t.type === 'sftp') {
     const panel = panelStore.getPanel(t.panelId)
     const ct = panel?.config?.type
-    if (ct === 'sftp') return Folders
-    if (ct === 'scp') return FileUp
-    if (ct === 'ftp') return FolderUp
-    if (ct === 'smb') return HardDrive
-    if (ct === 's3') return Cloud
-    if (ct === 'webdav') return Globe
-    if (ct === 'wsl-file') return FolderOpen
-    // SSH-based file panels follow the connection's protocol preference.
-    if (ct === 'ssh') return fileTransferProto(panel?.config) === 'scp' ? FileUp : Folders
-    return FolderUp
+    if (ct === 'ssh') return connectionTypeIconOfKind(fileTransferProto(panel?.config))
+    return connectionTypeIconOfKind(ct) || FolderUp
   }
-  if (t.type === 'rdp') return Monitor
-  if (t.type === 'vnc') return MonitorSmartphone
-  if (t.type === 'spice') return MonitorCloud
-  if (t.type === 'x11-desktop') return AppWindow
-  if (t.type === 'database' || t.type === 'redis' || t.type === 'mongodb' || t.type === 'elasticsearch') {
-    const panel = panelStore.getPanel(t.panelId)
-    if (panel?.config?.dbType === 'redis') return DatabaseZap
-    if (panel?.config?.dbType === 'mongodb') return Layers
-    if (panel?.config?.dbType === 'elasticsearch') return DatabaseSearch
-    return Database
-  }
-  if (t.type === 'monitor') return Activity
-  if (t.type === 'k8s') return ShipWheel
-  if (t.type === 'container') return Boxes
-  if (t.type === 'workspace') return LayoutDashboard
+  // Terminal tabs render the backing panel's session kind (ssh/local/k8s-exec/…).
   if (t.type === 'terminal') {
     const panel = panelStore.getPanel(t.panelId)
-    if (panel?.type === 'k8s-exec' || panel?.type === 'container-exec') return Box
-    if (panel?.type === 'local') return Laptop
-    if (panel?.type === 'wsl') return LaptopMinimal
-    if (panel?.type === 'serial') return Cable
-    if (panel?.type === 'tcp') return ArrowLeftRight
-    if (panel?.type === 'telnet') return Terminal
-    if (panel?.type === 'mosh') return Zap
-    return SquareTerminal
+    return connectionTypeIconOfKind(panel?.type) || SquareTerminal
   }
-  if (t.type === 'start') return SquarePlus
-  return null
+  // Everything else (connection tabs + UI tab kinds) resolves from the registry.
+  return connectionTypeIconOfKind(t.type)
 })
 
 const isAILocked = computed(() => {
@@ -270,8 +255,14 @@ const showBroadcastIcon = computed(() =>
 
 const hasActiveTransfers = computed(() => {
   if (props.tab.type === 'workspace') return false
-  const tasks = panelStore.getTransferTasks(props.tab.panelId)
-  return tasks.some(t => t.status === 'running' || t.status === 'paused')
+  const keys = [props.tab.panelId]
+  // Terminal tabs also surface their companion file panel's transfers.
+  if (props.tab.type === 'terminal') {
+    const companionKey = companionStore.sftpTransferKeyOf(props.tab.panelId)
+    if (companionKey) keys.push(companionKey)
+  }
+  return keys.some(k =>
+    panelStore.getTransferTasks(k).some(t => t.status === 'running' || t.status === 'paused'))
 })
 
 const isDisconnected = computed(() => {
@@ -342,6 +333,15 @@ const isSsh = computed(() => {
   if (props.tab.type !== 'terminal') return false
   const p = panelStore.getPanel((props.tab as TerminalTab).panelId)
   return p?.type === 'ssh'
+})
+
+// SSH-derived file tabs (SFTP/SCP from an SSH connection) — used to show the
+// reverse action: open a terminal for the same host.
+const isSftpOverSsh = computed(() => {
+  if (props.tab.type !== 'sftp') return false
+  const p = panelStore.getPanel((props.tab as SFTPTab).panelId)
+  // SCP panels also have config.type === 'ssh'; include them as well.
+  return p?.config?.type === 'ssh'
 })
 
 // Menu label for the file-transfer action follows the connection's protocol
@@ -541,6 +541,14 @@ function openMonitor() {
   closeContextMenu()
 }
 
+function openTerminal() {
+  const panel = panelStore.getPanel((props.tab as SFTPTab).panelId)
+  if (panel) {
+    window.dispatchEvent(new CustomEvent('app:connect-terminal', { detail: panel }))
+  }
+  closeContextMenu()
+}
+
 function locateHost() {
   const panel = panelStore.getPanel((props.tab as TerminalTab).panelId)
   if (panel?.config?.id) {
@@ -617,17 +625,17 @@ onMounted(async () => {
 .tab-item {
   display: flex;
   align-items: center;
-  gap: 2px;
-  height: 28px;
-  min-width: 144px;
-  padding: 0 12px;
+  gap: 0.125rem;
+  height: 1.75rem;
+  min-width: 9rem;
+  padding: 0 0.75rem;
   margin: 0 1px;
   cursor: pointer;
   user-select: none;
   border-radius: var(--radius-sm);
   position: relative;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 0.75rem;
   transition: background 0.15s ease, color 0.15s ease;
   flex-shrink: 0;
   --wails-draggable: no-drag;
@@ -641,29 +649,46 @@ onMounted(async () => {
   color: var(--text-primary);
   box-shadow: inset 0 0 0 1px var(--accent);
 }
+/* AI-locked tabs carry a warning-tinted background, not an edge marker, so the
+   state reads at a glance (issue #909). The border is left alone: the accent
+   ring stays the sole "which tab is selected" signal. */
 .tab-item.ai-locked {
-  box-shadow: inset 2px 0 0 var(--warning), inset 0 0 12px var(--warning-subtle);
+  background: var(--warning-tab);
+  color: var(--text-primary);
+}
+.tab-item.ai-locked:hover {
+  background: var(--warning-tab-hover);
 }
 .tab-item.active.ai-locked {
-  background: var(--bg-hover);
+  background: var(--warning-tab-active);
   color: var(--text-primary);
-  box-shadow: inset 0 0 0 1px var(--accent), inset 2px 0 0 var(--warning), inset 0 0 12px var(--warning-subtle);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 .tab-name {
-  font-size: 12px;
+  font-size: 0.75rem;
   white-space: nowrap;
   overflow: hidden;
-  /* 约 25 个字符后省略，避免过长主机名撑大标题栏；完整名见 title 悬停 */
-  max-width: 200px;
+  /* Keep a full IPv6 address visible; longer custom names still use ellipsis. */
+  max-width: 18.75rem;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   font-weight: 500;
 }
 .tab-name-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.tab-shortcut {
+  flex-shrink: 0;
+  margin-left: 0.25rem;
+  color: var(--text-muted);
+  font-size: 0.625rem;
+  font-weight: 500;
+  /* UI font so macOS modifier symbols (⌘⌥⇧) render with their native
+     system-font shapes instead of a mono fallback. */
+  font-family: var(--font-ui);
 }
 .tab-disconnected {
   opacity: 0.5;
@@ -672,15 +697,15 @@ onMounted(async () => {
   position: relative;
   display: inline-flex;
   flex-shrink: 0;
-  margin-right: 4px;
+  margin-right: 0.25rem;
 }
 .tab-type-icon {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
+  width: 0.875rem;
+  height: 0.875rem;
   color: var(--text-muted);
 }
 /* Broadcast status icon occupies the exact same far-right slot as the right
@@ -699,20 +724,20 @@ onMounted(async () => {
 }
 .tab-notification-dot {
   position: absolute;
-  top: -2px;
-  right: -4px;
-  width: 6px;
-  height: 6px;
+  top: -0.125rem;
+  right: -0.25rem;
+  width: 0.375rem;
+  height: 0.375rem;
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 0 1px var(--bg-base);
 }
 .tab-log-dot {
   position: absolute;
-  right: -2px;
-  bottom: -2px;
-  width: 6px;
-  height: 6px;
+  right: -0.125rem;
+  bottom: -0.125rem;
+  width: 0.375rem;
+  height: 0.375rem;
   background: #e5484d;
   border-radius: 50%;
   pointer-events: auto;
@@ -726,30 +751,30 @@ onMounted(async () => {
   line-height: 1;
 }
 .tab-name-input {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-family: inherit;
   color: var(--text-primary);
   background: var(--bg-base);
   border: 1px solid var(--accent);
   border-radius: var(--radius-sm);
-  padding: 2px 6px;
-  width: 120px;
+  padding: 0.125rem 0.375rem;
+  width: 7.5rem;
   outline: none;
 }
 .tab-close {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
-  margin-right: 4px;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-right: 0.25rem;
   padding: 0;
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 0.875rem;
   transition: all 0.12s ease;
 }
 .tab-close:hover {
@@ -758,7 +783,7 @@ onMounted(async () => {
 }
 /* Close button on the right side of the tab (appearance setting).
    margin-left:auto pushes it flush to the far right edge of the tab
-   (inside the 12px horizontal padding), instead of hugging the name.
+   (inside the 0.75rem horizontal padding), instead of hugging the name.
 
    The button is always present in the layout when the right-side setting is on
    — ghosted (visibility:hidden) while not hovered OR the tab is locked — so its

@@ -2,15 +2,15 @@
   <el-dialog append-to-body
     v-model="visible"
     :title="t('editRepo.title')"
-    width="520px"
+    width="32.5rem"
     :close-on-click-modal="false"
     @close="handleClose"
   >
-    <el-form label-width="120px" class="edit-repo-form">
+    <el-form label-width="7.5rem" class="edit-repo-form">
       <el-form-item :label="t('editRepo.url')">
         <div class="locked-field">
           <span class="locked-value">{{ syncStore.config.repoUrl }}</span>
-          <el-icon class="lock-icon"><Lock :size="14" /></el-icon>
+          <el-icon class="lock-icon"><Lock :size="'0.875rem'" /></el-icon>
         </div>
         <div class="form-hint">{{ t('editRepo.urlLocked') }}</div>
       </el-form-item>
@@ -136,17 +136,17 @@ async function handleSubmit() {
 .edit-repo-form {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0.25rem;
 }
 
 .locked-field {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
   background: var(--el-fill-color-light);
-  border-radius: 4px;
-  font-size: 13px;
+  border-radius: 0.25rem;
+  font-size: 0.8125rem;
   font-family: var(--font-mono);
   color: var(--text-secondary);
   word-break: break-all;
@@ -163,15 +163,15 @@ async function handleSubmit() {
 }
 
 .form-hint {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
-  margin-top: 4px;
+  margin-top: 0.25rem;
   line-height: 1.4;
 }
 
 .form-error {
   color: var(--el-color-danger);
-  font-size: 13px;
-  margin-top: 8px;
+  font-size: 0.8125rem;
+  margin-top: 0.5rem;
 }
 </style>

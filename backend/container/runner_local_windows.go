@@ -7,13 +7,16 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
-	"syscall"
 
 	"github.com/UserExistsError/conpty"
+
+	"github.com/ys-ll/uniterm/backend/platform"
 )
 
+// setHideWindow delegates to the shared platform helper so every console
+// child spawn site funnels through the same CREATE_NO_WINDOW entry point.
 func setHideWindow(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	platform.HideConsoleWindow(cmd)
 }
 
 type localPTY struct {

@@ -1295,31 +1295,6 @@ func (a *App) FetchModels(apiKey, baseURL, protocol string, proxyID string) ([]M
 	}
 	return result.Data, nil
 }
-// AI Config Store methods
-
-func (a *App) SaveAIConfig(config store.AIConfig) error {
-	if a.settingsStore == nil {
-		return fmt.Errorf("settings store not initialized")
-	}
-	settings, err := a.settingsStore.Load()
-	if err != nil {
-		return fmt.Errorf("load settings: %w", err)
-	}
-	// Update the active model's fields
-	for i := range settings.AI.Models {
-		if settings.AI.Models[i].ID == settings.AI.ActiveModelID {
-			settings.AI.Models[i].APIKey = config.APIKey
-			settings.AI.Models[i].BaseURL = config.BaseURL
-			settings.AI.Models[i].Model = config.Model
-			break
-		}
-	}
-	if err := a.settingsStore.Save(settings); err != nil {
-		return err
-	}
-	a.triggerAutoSync()
-	return nil
-}
 
 
 // SkillsStore methods

@@ -3,7 +3,7 @@
     :model-value="visible"
     @update:model-value="(v: boolean) => !v && onCancel()"
     :title="t('unlock.title')"
-    width="400px"
+    width="25rem"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
     :show-close="false"
@@ -22,7 +22,7 @@ import { ref } from 'vue'
 import { useI18n } from '../i18n'
 import { useCredentialStore } from '../stores/credentialStore'
 
-const props = defineProps<{ visible: boolean }>()
+defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ (e: 'update:visible', v: boolean): void; (e: 'done'): void; (e: 'reset'): void }>()
 
 const { t } = useI18n()
@@ -49,5 +49,5 @@ function onCancel() { emit('update:visible', false) }
 </script>
 
 <style scoped>
-.form-error { color: var(--el-color-danger); font-size: 13px; margin-top: 8px; }
+.form-error { color: var(--el-color-danger); font-size: 0.8125rem; margin-top: 0.5rem; }
 </style>

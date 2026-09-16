@@ -61,7 +61,6 @@ export function useSuggestions() {
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
   let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null
-  let currentAbortController: AbortController | null = null
 
   async function loadHistory(): Promise<HistoryEntry[]> {
     if (historyLoaded) {

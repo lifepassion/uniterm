@@ -3,9 +3,13 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
+	"unsafe"
 
 	"github.com/ys-ll/uniterm/backend/log"
 )
@@ -122,6 +126,17 @@ const macBundleID = "com.wails.uniTerm"
 // The setting is written once (only when not already disabled) and persists
 // across runs, so it is a no-op on subsequent launches. It runs asynchronously
 // to avoid adding latency to startup.
+// openWithSystem opens the file with its default associated application via
+// `open`. macOS has no scriptable "open with" picker, so the degrading
+// behaviour from the issue discussion applies: no chooser, the file simply
+// opens in whatever the desktop currently associates with the extension.
+func (a *App) openWithSystem(p string) error {
+	if err := exec.Command("open", p).Start(); err != nil {
+		return fmt.Errorf("failed to open %s: %w", p, err)
+	}
+	return nil
+}
+
 func (a *App) configureMacKeyRepeat() {
 	go func() {
 		// Skip the write if it's already disabled to avoid churning the
@@ -139,4 +154,20 @@ func (a *App) configureMacKeyRepeat() {
 		}
 		log.Writef("configureMacKeyRepeat: disabled ApplePressAndHoldEnabled for %s (key-repeat enabled)", macBundleID)
 	}()
+}
+
+// applyRoundedCorners is a no-op on macOS: window corners are handled by the
+// platform (the Windows build asks DWM for Win11 rounded corners instead).
+func applyRoundedCorners(unsafe.Pointer) {}
+
+// systemPrefersDark reports whether macOS is in dark mode via the same global
+// preference (`AppleInterfaceStyle`) WKWebView consults for the CSS
+// prefers-color-scheme media query. The key only exists when a dark variant
+// is active, so a read error means light mode. Needed because v3's
+// IsDarkMode() is unavailable before Run() (see main.go windowBackgroundColour).
+func systemPrefersDark() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "defaults", "read", "-g", "AppleInterfaceStyle").Output()
+	return err == nil && len(out) > 0
 }

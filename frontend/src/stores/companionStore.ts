@@ -6,6 +6,7 @@ import { useSessionStore } from './sessionStore'
 import { useTabStore } from './tabStore'
 import { useConnectionStore } from './connectionStore'
 import { fileTransferProto } from '../utils/fileTransferUtils'
+import { unregisterTransferRoute } from '../services/transferTaskCenter'
 import type { ConnectionConfig } from '../types/session'
 
 export interface CompanionEntry {
@@ -48,6 +49,10 @@ export const useCompanionStore = defineStore('companion', () => {
   const entries = ref<Record<string, CompanionEntry>>({})
   const fileViewCache = ref<Record<string, FileViewCache>>({})
   const monitorViewCache = ref<Record<string, MonitorViewCache>>({})
+  // Per-files-panel "follow terminal path" flag (sidebar navigates when the
+  // terminal's shell reports a cwd change). Ephemeral by design: never
+  // persisted, resets with the session.
+  const followPathByPanel = ref<Record<string, boolean>>({})
 
   const panelStore = usePanelStore()
   const sessionStore = useSessionStore()
@@ -114,10 +119,14 @@ export const useCompanionStore = defineStore('companion', () => {
     return entries.value[pid]?.monitorSessionId ?? null
   })
 
-  const transferKey = computed(() => {
-    const pid = activeFilesPanelId.value
-    return pid ? `${pid}__sftp` : ''
-  })
+  // Companion file-panel transfer lists are stored in panelStore under a key
+  // derived from the owning (SSH/WSL) panel id. Terminal tabs use the same
+  // helper to surface active companion transfers on their tab.
+  function sftpTransferKeyOf(panelId: string): string {
+    return panelId ? `${panelId}__sftp` : ''
+  }
+
+  const transferKey = computed(() => sftpTransferKeyOf(getActiveFilesPanelId() ?? ''))
 
   function ensureEntry(sshPanelId: string): CompanionEntry {
     if (!entries.value[sshPanelId]) {
@@ -171,6 +180,7 @@ export const useCompanionStore = defineStore('companion', () => {
       return entry.sftpSessionId
     }
     if (entry.sftpSessionId) {
+      unregisterTransferRoute(entry.sftpSessionId)
       try { await CloseSession(entry.sftpSessionId) } catch { /* ignore */ }
       entry.sftpSessionId = undefined
     }
@@ -280,6 +290,13 @@ export const useCompanionStore = defineStore('companion', () => {
     await ensureMonitor(pid)
   }
 
+  // Follow-terminal-path is DEFAULT-OFF: the record only ever stores an
+  // explicit `true` (user turned it on); absence means disabled.
+  function toggleFollowPath(panelId: string) {
+    const next = followPathByPanel.value[panelId] !== true
+    followPathByPanel.value = { ...followPathByPanel.value, [panelId]: next }
+  }
+
   async function disposeForPanel(sshPanelId: string) {
     const entry = entries.value[sshPanelId]
     // Drop companion view caches together with the panel's sessions.
@@ -289,12 +306,15 @@ export const useCompanionStore = defineStore('companion', () => {
     if (monitorViewCache.value[sshPanelId]) {
       delete monitorViewCache.value[sshPanelId]
     }
+    delete followPathByPanel.value[sshPanelId]
     if (!entry) return
     const sftpId = entry.sftpSessionId
     const monitorId = entry.monitorSessionId
     delete entries.value[sshPanelId]
     if (sftpId) {
       try { await CloseSession(sftpId) } catch { /* ignore */ }
+      unregisterTransferRoute(sftpId)
+      panelStore.removeTransferTasks(sftpTransferKeyOf(sshPanelId))
     }
     if (monitorId) {
       try { await CloseSession(monitorId) } catch { /* ignore */ }
@@ -335,6 +355,7 @@ export const useCompanionStore = defineStore('companion', () => {
     filesWidth,
     monitorWidth,
     entries,
+    followPathByPanel,
     activeSshPanelId,
     activeFilesPanelId,
     sshConnected,
@@ -343,6 +364,7 @@ export const useCompanionStore = defineStore('companion', () => {
     currentSftpSessionId,
     currentMonitorSessionId,
     transferKey,
+    sftpTransferKeyOf,
     ensureSftp,
     ensureMonitor,
     toggleFiles,
@@ -358,5 +380,6 @@ export const useCompanionStore = defineStore('companion', () => {
     setFileViewCache,
     getMonitorViewCache,
     setMonitorViewCache,
+    toggleFollowPath,
   }
 })

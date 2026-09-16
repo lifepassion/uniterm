@@ -1,15 +1,17 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import type { AppSettings, AIModelConfig, CustomTerminalTheme } from '../types/settings'
-import { DEFAULT_SETTINGS, DEFAULT_KEYBOARD } from '../types/settings'
+import { DEFAULT_SETTINGS, normalizeKeyBindings } from '../types/settings'
 import { SaveSettings, LoadSettings, GetAvailableShells, SetDefaultSessionLogDir } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { Events } from '@wailsio/runtime'
 import { setLocale } from '../i18n'
+import { useAIConfigStore } from './aiConfigStore'
 
 // Module-level un-subscriber for the cross-window store:settings:changed listener.
 // Tracked at module scope so re-imports under HMR can detach the previous
 // listener before re-subscribing (FE-03).
 let unsubSettingsChanged: (() => void) | null = null
+let unsubAiChanged: (() => void) | null = null
 
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<AppSettings>({ ...DEFAULT_SETTINGS })
@@ -42,6 +44,46 @@ export const useSettingsStore = defineStore('settings', () => {
   // For navigating to a specific settings category from other components
   const openCategory = ref<string | null>(null)
 
+  // Tracks the last ai.json payload pushed from this store so unrelated
+  // settings saves don't rewrite the AI config file needlessly.
+  let lastSavedAiJson = ''
+
+  // Overlay the syncable AI slice (ai.json) onto the settings blob and
+  // validate the device-local activeModelId against the synced catalog.
+  function recomposeAi() {
+    const aiCfg = useAIConfigStore()
+    const models = aiCfg.models.length ? aiCfg.models : settings.value.ai.models
+    settings.value.ai = {
+      maxTurns: aiCfg.maxTurns,
+      models,
+      activeModelId: models.some(m => m.id === settings.value.ai.activeModelId)
+        ? settings.value.ai.activeModelId
+        : (models[0]?.id ?? DEFAULT_SETTINGS.ai.activeModelId)
+    }
+  }
+
+  function syncAiConfigFromSettings() {
+    const aiJson = JSON.stringify({ maxTurns: settings.value.ai.maxTurns, models: settings.value.ai.models })
+    if (aiJson === lastSavedAiJson) return
+    lastSavedAiJson = aiJson
+    const aiCfg = useAIConfigStore()
+    aiCfg.maxTurns = settings.value.ai.maxTurns
+    aiCfg.models = settings.value.ai.models
+    aiCfg.save()
+  }
+
+  // Apply the UI font baseline to the rem root and cache it for the
+  // pre-paint script in index.html (avoids a wrong-size flash on reload).
+  function applyUiFontSize() {
+    const px = (settings.value.uiFontSize / 12) * 16
+    document.documentElement.style.fontSize = px + 'px'
+    try {
+      localStorage.setItem('uiFontSize', String(settings.value.uiFontSize))
+    } catch {
+      // private mode etc. — the loaded value still applies this session
+    }
+  }
+
   function applyTheme() {
     let theme = settings.value.theme
     if (theme === 'system') {
@@ -57,11 +99,16 @@ export const useSettingsStore = defineStore('settings', () => {
       const loadedSettings = await LoadSettings()
       if (loadedSettings) {
         settings.value = mergeSettings(loadedSettings)
-        loaded.value = true
       }
     } catch {
       // use defaults
+    } finally {
+      loaded.value = true
     }
+    await useAIConfigStore().load()
+    recomposeAi()
+    lastSavedAiJson = JSON.stringify({ maxTurns: settings.value.ai.maxTurns, models: settings.value.ai.models })
+    applyUiFontSize()
     try {
       availableShells.value = await GetAvailableShells()
     } catch {
@@ -89,6 +136,9 @@ export const useSettingsStore = defineStore('settings', () => {
     } catch {
       // use defaults
     }
+    await useAIConfigStore().load()
+    recomposeAi()
+    applyUiFontSize()
     applyTheme()
     setLocale(settings.value.language)
   }
@@ -96,6 +146,8 @@ export const useSettingsStore = defineStore('settings', () => {
   async function save() {
     try {
       await SaveSettings(settings.value)
+      // Mirror the syncable AI slice into ai.json (skipped when unchanged).
+      syncAiConfigFromSettings()
       // Keep the backend override in sync on every save. Cheap and
       // avoids the need for a dedicated watcher on this single field.
       SetDefaultSessionLogDir(settings.value.terminal.sessionLogDir || '').catch(() => {})
@@ -172,6 +224,18 @@ export const useSettingsStore = defineStore('settings', () => {
 
   const sftpBookmarks = computed(() => settings.value.sftpBookmarks)
 
+  // Writable computed so components can toggle visibility directly; every
+  // write is persisted with the settings blob. The transfer panel auto-pops
+  // on new tasks regardless of this flag — it only remembers the last
+  // visibility across restarts.
+  const sftpTransferPanelVisible = computed<boolean>({
+    get: () => settings.value.sftpTransferPanelVisible,
+    set: (v: boolean) => {
+      settings.value.sftpTransferPanelVisible = v
+      save()
+    }
+  })
+
   function addSftpBookmark(mode: 'local' | 'remote', path: string) {
     const key = mode === 'local' ? 'localPaths' : 'remotePaths'
     const paths = settings.value.sftpBookmarks[key]
@@ -200,6 +264,9 @@ export const useSettingsStore = defineStore('settings', () => {
   // Apply theme when it changes
   watch(() => settings.value.theme, applyTheme)
 
+  // Apply the UI font baseline as soon as it changes (no restart needed)
+  watch(() => settings.value.uiFontSize, applyUiFontSize)
+
   // Listen for system color scheme changes
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
     systemPrefersDark.value = e.matches
@@ -214,13 +281,29 @@ export const useSettingsStore = defineStore('settings', () => {
     if (data) {
       settings.value = mergeSettings(data)
       loaded.value = true
+      applyUiFontSize()
       applyTheme()
+    }
+  })
+
+  // AI config changed via a sync pull — refresh the local composition.
+  unsubAiChanged?.()
+  unsubAiChanged = Events.On('store:ai:changed', (ev) => {
+    const data = ev.data as { maxTurns?: number; models?: AIModelConfig[] } | null
+    if (data) {
+      const aiCfg = useAIConfigStore()
+      aiCfg.maxTurns = data.maxTurns ?? DEFAULT_SETTINGS.ai.maxTurns
+      aiCfg.models = data.models?.length ? data.models : aiCfg.models
+      recomposeAi()
+      lastSavedAiJson = JSON.stringify({ maxTurns: settings.value.ai.maxTurns, models: settings.value.ai.models })
     }
   })
 
   function dispose() {
     unsubSettingsChanged?.()
     unsubSettingsChanged = null
+    unsubAiChanged?.()
+    unsubAiChanged = null
   }
 
   return {
@@ -247,6 +330,7 @@ export const useSettingsStore = defineStore('settings', () => {
     removeModel,
     setActiveModel,
     sftpBookmarks,
+    sftpTransferPanelVisible,
     addSftpBookmark,
     removeSftpBookmark,
     addCustomTheme,
@@ -260,6 +344,7 @@ function mergeSettings(loaded: AppSettings): AppSettings {
   return {
     theme: loaded.theme || DEFAULT_SETTINGS.theme,
     language: loaded.language || DEFAULT_SETTINGS.language,
+    uiFontSize: loaded.uiFontSize ?? DEFAULT_SETTINGS.uiFontSize,
     terminal: {
       ...DEFAULT_SETTINGS.terminal,
       ...loaded.terminal,
@@ -272,17 +357,16 @@ function mergeSettings(loaded: AppSettings): AppSettings {
       models: loaded.ai?.models?.length ? loaded.ai.models : DEFAULT_SETTINGS.ai.models,
       activeModelId: loaded.ai?.activeModelId || DEFAULT_SETTINGS.ai.activeModelId
     },
-    keyboard: {
-      ...DEFAULT_KEYBOARD,
-      ...(loaded.keyboard || {})
-    },
+    keyboard: normalizeKeyBindings(loaded.keyboard || {}),
     autoCheckUpdate: loaded.autoCheckUpdate ?? DEFAULT_SETTINGS.autoCheckUpdate,
+    updateSource: loaded.updateSource ?? DEFAULT_SETTINGS.updateSource,
     closeTabPrompt: loaded.closeTabPrompt ?? DEFAULT_SETTINGS.closeTabPrompt,
     closeAppPrompt: loaded.closeAppPrompt ?? DEFAULT_SETTINGS.closeAppPrompt,
     sftpBookmarks: {
       localPaths: loaded.sftpBookmarks?.localPaths || [],
       remotePaths: loaded.sftpBookmarks?.remotePaths || []
     },
+    sftpTransferPanelVisible: loaded.sftpTransferPanelVisible ?? DEFAULT_SETTINGS.sftpTransferPanelVisible,
     customTerminalThemes: loaded.customTerminalThemes || [],
     defaultLocalShell: loaded.defaultLocalShell ?? DEFAULT_SETTINGS.defaultLocalShell,
     tabCloseButton: loaded.tabCloseButton || DEFAULT_SETTINGS.tabCloseButton,

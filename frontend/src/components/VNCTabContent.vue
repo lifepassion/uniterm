@@ -2,7 +2,7 @@
   <div class="vnc-tab-content">
     <!-- Connecting state -->
     <div v-if="status === 'connecting'" class="vnc-overlay">
-      <el-icon class="is-loading" :size="32"><Loader /></el-icon>
+      <el-icon class="is-loading" :size="'2rem'"><Loader /></el-icon>
       <p>{{ t('vnc.connecting', { host: config?.host || '...' }) }}</p>
     </div>
 
@@ -389,7 +389,7 @@ watch(showDotCursor, (val) => {
   top: 0;
   left: 0;
   right: 0;
-  bottom: 24px;
+  bottom: 1.5rem;
   background: #000;
   outline: none;
   overflow: auto;
@@ -401,19 +401,19 @@ watch(showDotCursor, (val) => {
 .vnc-overlay {
   position: absolute;
   inset: 0;
-  bottom: 24px;
+  bottom: 1.5rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 0.75rem;
   color: var(--text-muted);
   z-index: 10;
 }
 .vnc-error-text { color: var(--error); }
 .vnc-error-detail {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   max-width: 80%;
   text-align: center;
   word-break: break-word;
@@ -423,23 +423,23 @@ watch(showDotCursor, (val) => {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 24px;
+  height: 1.5rem;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
   background: var(--bg-elevated);
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   box-sizing: border-box;
   z-index: 5;
 }
 .vnc-status-dot {
-  width: 8px; height: 8px;
+  width: 0.5rem; height: 0.5rem;
   border-radius: 50%;
   background: var(--success);
   flex-shrink: 0;
 }
 .vnc-status-sep { color: var(--text-disabled); }
-.vnc-status-label { font-size: 11px; }
+.vnc-status-label { font-size: 0.6875rem; }
 </style>

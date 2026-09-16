@@ -151,6 +151,15 @@ jobs:
           done
           ls -la bin/uniTerm-amd64.app/Contents/MacOS bin/uniTerm-arm64.app/Contents/MacOS
 
+          # Self-update payloads: bare app-bundle binary per arch, matching
+          # what the in-app updater downloads, verifies and ad-hoc re-signs.
+          # -j junk-paths so the zip root holds just the "uniTerm" executable.
+          for arch in amd64 arm64; do
+            zip -q -j "uniterm-darwin-${arch}-${VERSION}.zip" \
+              "bin/uniTerm-${arch}.app/Contents/MacOS/uniTerm"
+          done
+          ls -la uniterm-darwin-*.zip
+
       - name: Package (macOS)
         if: matrix.slug == 'darwin'
         run: |
@@ -169,8 +178,12 @@ jobs:
             if hdiutil create -volname uniTerm -srcfolder "$STAGE" -ov -format UDZO "uniterm-darwin-${arch}-${VERSION}.dmg"; then
               echo "dmg created ($arch)"
             else
+              # Same filename as the bare-binary zip above — the fallback
+              # overwrites it with a full .app, which is both manually
+              # installable and a valid in-app update payload (the updater
+              # picks the executable out of the bundle by name).
               echo "hdiutil dmg failed ($arch) — shipping zipped .app instead"
-              rm -f "uniterm-darwin-${arch}-${VERSION}.dmg"
+              rm -f "uniterm-darwin-${arch}-${VERSION}.zip"
               ditto -c -k --sequesterRsrc --keepParent "$APP" "uniterm-darwin-${arch}-${VERSION}.zip"
             fi
             rm -rf "$STAGE"
@@ -311,6 +324,10 @@ jobs:
         run: |
           find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.exe' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' \) -exec mv {} . \;
           ls -la uniterm-*
+          # checksums.txt powers the in-app updater's SHA256 verification.
+          # sync-gitee.yml mirrors it to Gitee together with the assets.
+          sha256sum uniterm-* > checksums.txt
+          cat checksums.txt
 
       - name: Determine release mode
         run: |
@@ -371,5 +388,6 @@ jobs:
             uniterm-*.dmg
             uniterm-*.deb
             uniterm-*.rpm
+            checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

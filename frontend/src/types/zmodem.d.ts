@@ -24,6 +24,7 @@ declare module 'zmodem.js/src/zmodem_browser' {
   export class Session {
     type: 'receive' | 'send'
     on(event: 'offer', handler: (offer: Offer) => void): void
+    on(event: 'session_end', handler: () => void): void
     start(): Promise<void>
     abort(): void
     close(): Promise<void>

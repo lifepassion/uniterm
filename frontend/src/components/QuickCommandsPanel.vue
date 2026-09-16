@@ -3,6 +3,7 @@
     <!-- Toolbar: search + actions -->
     <div class="qc-toolbar">
       <el-input
+        ref="searchInputRef"
         v-model="searchQuery"
         :placeholder="t('quickCommands.searchPlaceholder')"
         clearable
@@ -11,7 +12,7 @@
         @keydown="onListKeydown"
       />
       <button class="qc-icon-btn" :title="t('quickCommands.addCommand')" @click.stop="addMenuRef?.toggle($event.currentTarget)">
-        <Plus :size="15" />
+        <Plus :size="'0.9375rem'" />
       </button>
       <Menu ref="addMenuRef" v-model:visible="addMenuVisible" align="end">
         <MenuItem @click="onAddCommand()">{{ t('quickCommands.addCommand') }}</MenuItem>
@@ -32,8 +33,8 @@
           @drop.prevent="onGroupDrop(group.id, $event)"
         >
           <span class="qc-group-arrow">
-            <el-icon v-if="expandedGroups.has(group.id)"><ChevronDown :size="14" /></el-icon>
-            <el-icon v-else><ChevronRight :size="14" /></el-icon>
+            <el-icon v-if="expandedGroups.has(group.id)"><ChevronDown :size="'0.875rem'" /></el-icon>
+            <el-icon v-else><ChevronRight :size="'0.875rem'" /></el-icon>
           </span>
           <span class="qc-group-name">{{ group.name }}</span>
 
@@ -58,14 +59,14 @@
               <div class="qc-item-cmd" :class="{ 'qc-item-cmd-only': !cmd.name }">{{ cmd.command }}</div>
             </div>
             <div v-if="selectedId === cmd.id || hoveredId === cmd.id" class="qc-item-actions">
-              <button class="btn btn-ghost btn-icon btn-sm run" @click.stop="runCommand(cmd)" :title="t('quickCommands.run')">
-                <Play :size="14" />
+              <button class="btn btn-ghost btn-icon qc-action-btn run" @click.stop="runCommand(cmd)" :title="t('quickCommands.run')">
+                <Play :size="'1rem'" />
               </button>
-              <button class="btn btn-ghost btn-icon btn-sm paste" @click.stop="pasteCommand(cmd)" :title="t('quickCommands.paste')">
-                <Clipboard :size="14" />
+              <button class="btn btn-ghost btn-icon qc-action-btn paste" @click.stop="pasteCommand(cmd)" :title="t('quickCommands.paste')">
+                <Clipboard :size="'1rem'" />
               </button>
-              <button class="btn btn-ghost btn-icon btn-sm" @click.stop="copyCommand(cmd)" :title="t('quickCommands.copy')">
-                <Copy :size="14" />
+              <button class="btn btn-ghost btn-icon qc-action-btn" @click.stop="copyCommand(cmd)" :title="t('quickCommands.copy')">
+                <Copy :size="'1rem'" />
               </button>
             </div>
           </div>
@@ -92,14 +93,14 @@
             <div class="qc-item-cmd" :class="{ 'qc-item-cmd-only': !cmd.name }">{{ cmd.command }}</div>
           </div>
           <div v-if="selectedId === cmd.id || hoveredId === cmd.id" class="qc-item-actions">
-            <button class="btn btn-ghost btn-icon btn-sm run" @click.stop="runCommand(cmd)" :title="t('quickCommands.run')">
-              <Play :size="14" />
+            <button class="btn btn-ghost btn-icon qc-action-btn run" @click.stop="runCommand(cmd)" :title="t('quickCommands.run')">
+              <Play :size="'1rem'" />
             </button>
-            <button class="btn btn-ghost btn-icon btn-sm paste" @click.stop="pasteCommand(cmd)" :title="t('quickCommands.paste')">
-              <Clipboard :size="14" />
+            <button class="btn btn-ghost btn-icon qc-action-btn paste" @click.stop="pasteCommand(cmd)" :title="t('quickCommands.paste')">
+              <Clipboard :size="'1rem'" />
             </button>
-            <button class="btn btn-ghost btn-icon btn-sm" @click.stop="copyCommand(cmd)" :title="t('quickCommands.copy')">
-              <Copy :size="14" />
+            <button class="btn btn-ghost btn-icon qc-action-btn" @click.stop="copyCommand(cmd)" :title="t('quickCommands.copy')">
+              <Copy :size="'1rem'" />
             </button>
           </div>
         </div>
@@ -116,8 +117,8 @@
           @drop.prevent="onGroupDrop('__ungrouped__', $event)"
         >
           <span class="qc-group-arrow">
-            <el-icon v-if="expandedGroups.has('__ungrouped__')"><ChevronDown :size="14" /></el-icon>
-            <el-icon v-else><ChevronRight :size="14" /></el-icon>
+            <el-icon v-if="expandedGroups.has('__ungrouped__')"><ChevronDown :size="'0.875rem'" /></el-icon>
+            <el-icon v-else><ChevronRight :size="'0.875rem'" /></el-icon>
           </span>
           <span class="qc-group-name">{{ t('quickCommands.noGroup') }}</span>
         </div>
@@ -140,14 +141,14 @@
               <div class="qc-item-cmd" :class="{ 'qc-item-cmd-only': !cmd.name }">{{ cmd.command }}</div>
             </div>
             <div v-if="selectedId === cmd.id || hoveredId === cmd.id" class="qc-item-actions">
-              <button class="btn btn-ghost btn-icon btn-sm run" @click.stop="runCommand(cmd)" :title="t('quickCommands.run')">
-                <Play :size="14" />
+              <button class="btn btn-ghost btn-icon qc-action-btn run" @click.stop="runCommand(cmd)" :title="t('quickCommands.run')">
+                <Play :size="'1rem'" />
               </button>
-              <button class="btn btn-ghost btn-icon btn-sm paste" @click.stop="pasteCommand(cmd)" :title="t('quickCommands.paste')">
-                <Clipboard :size="14" />
+              <button class="btn btn-ghost btn-icon qc-action-btn paste" @click.stop="pasteCommand(cmd)" :title="t('quickCommands.paste')">
+                <Clipboard :size="'1rem'" />
               </button>
-              <button class="btn btn-ghost btn-icon btn-sm" @click.stop="copyCommand(cmd)" :title="t('quickCommands.copy')">
-                <Copy :size="14" />
+              <button class="btn btn-ghost btn-icon qc-action-btn" @click.stop="copyCommand(cmd)" :title="t('quickCommands.copy')">
+                <Copy :size="'1rem'" />
               </button>
             </div>
           </div>
@@ -182,7 +183,7 @@
     <el-dialog append-to-body
       v-model="deleteGroupDialogVisible"
       :title="t('quickCommands.deleteGroupTitle')"
-      width="400px"
+      width="25rem"
       :close-on-click-modal="false"
     >
       <p>{{ t('quickCommands.deleteGroupDesc') }}</p>
@@ -196,7 +197,7 @@
     <el-dialog append-to-body
       v-model="groupNameDialogVisible"
       :title="renamingGroup ? t('quickCommands.renameGroup') : t('quickCommands.addGroup')"
-      width="360px"
+      width="22.5rem"
       :close-on-click-modal="false"
     >
       <el-input v-model="groupNameInput" :placeholder="t('quickCommands.groupName')" maxlength="30" @keyup.enter="doSaveGroupName" />
@@ -233,7 +234,7 @@ import {
 import { useLocalStateStore } from '../stores/localStateStore'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
-import { SessionWrite } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { queuedSessionWrite } from '../services/sessionWriter'
 import { useI18n } from '../i18n'
 import { msg } from '../services/message'
 import { focusActivePanelTerminal } from '../composables/useFocusTerminal'
@@ -253,7 +254,18 @@ const focusedId = ref<string | null>(null)
 const listRef = ref<HTMLDivElement | null>(null)
 const hoveredId = ref<string | null>(null)
 const searchQuery = ref('')
+const searchInputRef = ref<any>(null)
 const expandedGroups = ref<Set<string>>(new Set())
+
+function focusSearch() {
+  const input = searchInputRef.value?.$el?.querySelector('input')
+  if (input instanceof HTMLInputElement) {
+    input.focus()
+    input.select()
+  }
+}
+
+defineExpose({ focusSearch })
 
 const dragOverGroupId = ref<string | null>(null)
 
@@ -406,13 +418,13 @@ async function sendCommand(cmd: QuickCommand, mode: 'run' | 'paste') {
 
   for (const sid of sids) {
     if (mode === 'paste') {
-      SessionWrite(sid, cmd.command)
+      queuedSessionWrite(sid, cmd.command)
       continue
     }
     const text = cmd.command.replace(/\r\n?/g, '\n')
     const lines = text.split('\n').filter(l => l.length > 0)
     for (let i = 0; i < lines.length; i++) {
-      SessionWrite(sid, lines[i] + '\r')
+      queuedSessionWrite(sid, lines[i] + '\r')
       if (i < lines.length - 1) await new Promise(r => setTimeout(r, 100))
     }
   }
@@ -577,8 +589,8 @@ watch(searchQuery, (q) => {
 .qc-toolbar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 10px 6px;
+  gap: 0.25rem;
+  padding: 0 0.625rem 0.375rem;
   flex-shrink: 0;
 }
 
@@ -588,13 +600,13 @@ watch(searchQuery, (q) => {
 }
 
 .qc-icon-btn {
-  width: 26px;
-  height: 26px;
+  width: 1.875rem;
+  height: 1.875rem;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 4px;
+  border-radius: 0.25rem;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -609,20 +621,20 @@ watch(searchQuery, (q) => {
 .qc-list {
   flex: 1;
   overflow-y: auto;
-  padding: 0 8px 8px;
+  padding: 0 0.5rem 0.5rem;
 }
 
 .qc-group-header {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 10px 6px 6px;
+  gap: 0.25rem;
+  padding: 0.375rem 0.625rem 0.375rem 0.375rem;
   cursor: pointer;
   user-select: none;
   border-radius: var(--radius-sm);
   transition: background 0.12s ease;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 
@@ -638,7 +650,7 @@ watch(searchQuery, (q) => {
 .qc-group-arrow {
   display: inline-flex;
   align-items: center;
-  width: 16px;
+  width: 1rem;
   color: var(--text-disabled);
 }
 
@@ -651,18 +663,18 @@ watch(searchQuery, (q) => {
 .qc-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  min-height: 36px;
+  gap: 0.625rem;
+  padding: 0.375rem 0.625rem;
+  min-height: 2.25rem;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.12s ease;
-  margin-bottom: 2px;
+  margin-bottom: 0.125rem;
   user-select: none;
 }
 
 .qc-item.indented {
-  padding-left: 26px;
+  padding-left: 1.625rem;
 }
 
 .qc-item:hover {
@@ -685,7 +697,7 @@ watch(searchQuery, (q) => {
 }
 
 .qc-item-name {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -693,7 +705,7 @@ watch(searchQuery, (q) => {
 }
 
 .qc-item-cmd {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   font-family: var(--font-mono, 'Consolas', 'Courier New', monospace);
   white-space: nowrap;
@@ -702,25 +714,30 @@ watch(searchQuery, (q) => {
 }
 
 .qc-item-cmd-only {
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .qc-item-actions {
   display: flex;
-  gap: 2px;
+  gap: 0.125rem;
   flex-shrink: 0;
 }
 
+.qc-action-btn {
+  width: 1.875rem;
+  height: 1.875rem;
+}
+
 .qc-empty {
-  padding: 24px 12px;
+  padding: 1.5rem 0.75rem;
   text-align: center;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .delete-group-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
 }
 </style>

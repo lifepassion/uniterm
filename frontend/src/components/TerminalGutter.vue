@@ -267,12 +267,12 @@ onBeforeUnmount(() => {
 .terminal-gutter-time {
   display: inline-block;
   text-align: right;
-  padding-right: 2px;
+  padding-right: 0.125rem;
 }
 .terminal-gutter-num {
   display: inline-block;
   text-align: right;
-  padding-right: 8px;
+  padding-right: 0.5rem;
   color: var(--tg-num, currentColor);
 }
 </style>

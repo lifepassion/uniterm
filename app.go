@@ -8,21 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net"
-	"net/http"
-	"net/url"
-	"strconv"
-	"os"
-	"os/exec"
-	"path/filepath"
-	goruntime "runtime"
-	"strings"
-	stdsync "sync"
-	"sync/atomic"
-	"time"
 	"github.com/wailsapp/wails/v3/pkg/application"
-	"golang.org/x/crypto/ssh"
 	"github.com/ys-ll/uniterm/backend/container"
 	"github.com/ys-ll/uniterm/backend/credentials"
 	"github.com/ys-ll/uniterm/backend/importer"
@@ -34,6 +20,20 @@ import (
 	"github.com/ys-ll/uniterm/backend/sync"
 	"github.com/ys-ll/uniterm/backend/update"
 	"github.com/ys-ll/uniterm/backend/utils"
+	"golang.org/x/crypto/ssh"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	goruntime "runtime"
+	"strconv"
+	"strings"
+	stdsync "sync"
+	"sync/atomic"
+	"time"
 )
 
 type App struct {
@@ -46,6 +46,7 @@ type App struct {
 	connectionStore      *store.ConnectionStore
 	aiSessionStore       *store.AISessionStore
 	settingsStore        *store.SettingsStore
+	aiConfigStore        *store.AIConfigStore
 	identityStore        *store.IdentityStore
 	proxyStore           *store.ProxyStore
 	localStateStore      *store.LocalStateStore
@@ -55,6 +56,7 @@ type App struct {
 	tunnelStore          *store.TunnelStore
 	terminalHistoryStore *store.TerminalHistoryStore
 	recentStore          *store.RecentStore
+	favoriteStore        *store.FavoriteStore
 	syncService          *sync.SyncService
 	tunnelService        *session.TunnelService
 	mainHwnd             uintptr
@@ -102,8 +104,9 @@ type App struct {
 	// customLogDir, when non-empty, overrides defaultSessionLogDir()
 	// as the target for new session logs. Set from settings via
 	// SetDefaultSessionLogDir; ongoing logs are not migrated.
-	customLogDir   string
-	customLogDirMu stdsync.RWMutex
+	customLogDir         string
+	sessionLogFilename   string
+	sessionLogSettingsMu stdsync.RWMutex
 
 	// errCh accumulates non-fatal init failures during startup() so the
 	// frontend can surface them (see StartupError / "app:startup-error"
@@ -115,7 +118,7 @@ type App struct {
 }
 
 func NewApp(webviewDataPath string) *App {
-	return &App{
+	a := &App{
 		webviewDataPath:    webviewDataPath,
 		panelLogs:          make(map[string]*session.OutputLogger),
 		sessionToPanel:     make(map[string]string),
@@ -124,6 +127,21 @@ func NewApp(webviewDataPath string) *App {
 		containerManager:   container.NewManager(),
 		errCh:              make(chan error, 16),
 	}
+
+	// Transfer progress is published as Wails events, not OSC sequences in the
+	// terminal data stream.
+	session.TransferEventSink = func(sid string, payload map[string]any) {
+		a.emit("sftp:transfer", payload)
+	}
+
+	// OSC-7 cwd reports from SSH/WSL terminals (see backend/session/shell_
+	// integration.go) are forwarded so the frontend can follow the active
+	// directory in the sidebar.
+	session.TerminalCwdSink = func(sid string, cwd string) {
+		a.emit("terminal:cwd", map[string]any{"sessionId": sid, "cwd": cwd})
+	}
+
+	return a
 }
 
 // emit is a v3 helper that forwards an event to the frontend. It no-ops when
@@ -213,6 +231,10 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 // it until SetDataDir picks a directory; on the normal path it runs once at
 // startup. Runs exactly once either way.
 func (a *App) initStores(dataDir string, upgrade bool) {
+	// Point clink:// local shells at the app data dir (they drop a tuned
+	// clink profile next to the stores; see backend/session/local_clink.go).
+	session.SetClinkProfileDir(filepath.Join(dataDir, "clink"))
+
 	cs, err := store.NewConnectionStore(dataDir)
 	if err != nil {
 		log.Writef("Failed to init connection store: %v", err)
@@ -240,7 +262,16 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 		// respects the user's choice from a prior run.
 		if settings, err := ss.Load(); err == nil {
 			a.SetDefaultSessionLogDir(settings.Terminal.SessionLogDir)
+			a.setSessionLogFilename(settings.Terminal.SessionLogFilename)
 		}
+	}
+
+	acs, err := store.NewAIConfigStore(dataDir)
+	if err != nil {
+		log.Writef("Failed to init AI config store: %v", err)
+		a.sendStartupErr(fmt.Errorf("ai config store: %w", err))
+	} else {
+		a.aiConfigStore = acs
 	}
 
 	is, err := store.NewIdentityStore(dataDir)
@@ -268,6 +299,10 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 	a.recentStore = store.NewRecentStore(dataDir)
 	if _, err := a.recentStore.Load(); err != nil {
 		log.Writef("recentStore.Load: %v", err)
+	}
+	a.favoriteStore = store.NewFavoriteStore(dataDir)
+	if _, err := a.favoriteStore.Load(); err != nil {
+		log.Writef("favoriteStore.Load: %v", err)
 	}
 
 	// Push tunnel runtime state to the frontend, and bring up auto-start tunnels.
@@ -401,6 +436,19 @@ func (a *App) initCredentials(dataDir string, upgrade bool) {
 	}
 	if a.settingsStore != nil {
 		a.settingsStore.SetPasswordStore(cred)
+	}
+	if a.aiConfigStore != nil {
+		a.aiConfigStore.SetPasswordStore(cred)
+		// One-shot settings->ai.json migration. Runs after the password store
+		// is wired so model apiKeys land encrypted; the settings.json copy is
+		// left intact so a rollback to a pre-split build still finds them.
+		if a.settingsStore != nil {
+			if settings, err := a.settingsStore.Load(); err == nil {
+				if err := a.aiConfigStore.MigrateFromSettingsIfNeeded(settings); err != nil {
+					log.Writef("ai.json migration failed: %v", err)
+				}
+			}
+		}
 	}
 	if a.identityStore != nil {
 		a.identityStore.SetPasswordStore(cred)
@@ -637,6 +685,30 @@ func (a *App) shutdown() {
 		_ = a.terminalHistoryStore.Close()
 	}
 	os.RemoveAll(a.webviewDataPath)
+}
+
+// FavoriteStore methods
+
+func (a *App) GetFavoriteConnections() []string {
+	if a.favoriteStore == nil {
+		return []string{}
+	}
+	return a.favoriteStore.GetAll()
+}
+
+func (a *App) SaveFavoriteConnections(ids []string) error {
+	if a.favoriteStore == nil {
+		return fmt.Errorf("favorite store not initialized")
+	}
+	if _, err := a.favoriteStore.Load(); err != nil {
+		log.Writef("favoriteStore.Load: %v", err)
+	}
+	err := a.favoriteStore.Save(ids)
+	if err == nil {
+		a.emit("store:favorites:changed", a.favoriteStore.GetAll())
+		a.triggerAutoSync()
+	}
+	return err
 }
 
 // ConnectionStore methods
@@ -915,8 +987,34 @@ func (a *App) proxyDisabledName(id string) (string, bool) {
 	return "", false
 }
 
+// withExitCredOverride wraps a ConnResolver so the tunnel's exit connection
+// gets its empty user/password filled from inline credentials — the same
+// semantics as the TunnelSSHUser/TunnelSSHPassword handling in app_terminal.go:
+// inline values only fill EMPTY fields (never overwrite saved ones) and only on
+// the exit hop. Empty inline credentials return the resolver unchanged.
+func withExitCredOverride(resolve session.ConnResolver, exitID, user, password string) session.ConnResolver {
+	if user == "" && password == "" {
+		return resolve
+	}
+	return func(id string) (session.ConnectionConfig, bool) {
+		cfg, ok := resolve(id)
+		if !ok || id != exitID {
+			return cfg, ok
+		}
+		if cfg.User == "" && user != "" {
+			cfg.User = user
+		}
+		if cfg.Password == "" && password != "" {
+			cfg.Password = password
+		}
+		return cfg, true
+	}
+}
+
 // StartTunnel brings the tunnel with the given ID up and returns its state.
-func (a *App) StartTunnel(id string) (session.TunnelState, error) {
+// user/password carry inline credentials resolved by the frontend's credential
+// dialog for exit connections with nothing saved; they only fill empty fields.
+func (a *App) StartTunnel(id, user, password string) (session.TunnelState, error) {
 	if a.tunnelService == nil || a.tunnelStore == nil || a.connectionStore == nil {
 		return session.TunnelState{}, fmt.Errorf("tunnel service not initialized")
 	}
@@ -938,10 +1036,11 @@ func (a *App) StartTunnel(id string) (session.TunnelState, error) {
 	if err != nil {
 		return session.TunnelState{}, err
 	}
+	resolve = withExitCredOverride(resolve, t.SSHConnID, user, password)
 	st := a.tunnelService.StartTunnel(*t, resolve)
-	if st.Status == session.TunnelError {
-		return st, fmt.Errorf("%s", st.Error)
-	}
+	// A failed start is reported through the state (Status=Error + Error text);
+	// returning a Go error here too would turn the Wails call into a rejected
+	// promise and the frontend would lose the state it needs for the toast.
 	return st, nil
 }
 
@@ -951,6 +1050,27 @@ func (a *App) StopTunnel(id string) error {
 		a.tunnelService.StopTunnel(id)
 	}
 	return nil
+}
+
+// TestTunnel validates an unsaved tunnel configuration: it brings the tunnel
+// up under a throwaway ID through the same path as StartTunnel (SSH chain
+// dial/auth, then listener bind — for remote mode that also proves the port is
+// free on the server) and tears it down immediately. Status=Running means
+// everything bound; Error carries the reason. user/password carry inline
+// credentials resolved by the frontend's credential dialog (same override
+// semantics as StartTunnel).
+
+func (a *App) TestTunnel(t session.Tunnel, user, password string) (session.TunnelState, error) {
+	if a.tunnelService == nil || a.connectionStore == nil {
+		return session.TunnelState{}, fmt.Errorf("tunnel service not initialized")
+	}
+	resolve, err := a.connResolver()
+	if err != nil {
+		return session.TunnelState{}, err
+	}
+	resolve = withExitCredOverride(resolve, t.SSHConnID, user, password)
+	st := a.tunnelService.TestTunnel(t, resolve)
+	return st, nil
 }
 
 // ListTunnelStates returns the runtime state of every known tunnel.
@@ -977,7 +1097,11 @@ func (a *App) autoStartTunnels() {
 	}
 	for _, t := range data.Tunnels {
 		if t.AutoStart {
-			a.tunnelService.StartTunnel(t, resolve)
+			if st := a.tunnelService.StartTunnel(t, resolve); st.Status == session.TunnelError {
+				// The failure also reaches the frontend via the tunnel:state
+				// event; the log keeps a trace for diagnostics.
+				log.Writef("auto-start tunnel %s (%s): %s", t.Name, t.ID, st.Error)
+			}
 		}
 	}
 }
@@ -1106,6 +1230,11 @@ func (a *App) reloadStoresAfterSync() {
 	if a.settingsStore != nil {
 		if settings, err := a.settingsStore.Load(); err == nil {
 			a.emit("store:settings:changed", settings)
+		}
+	}
+	if a.aiConfigStore != nil {
+		if cfg, err := a.aiConfigStore.Load(); err == nil {
+			a.emit("store:ai:changed", cfg)
 		}
 	}
 	if a.quickCommandsStore != nil {
@@ -1286,27 +1415,6 @@ func (a *App) SyncDeleteRepo() error {
 	return a.syncService.DeleteRepo()
 }
 
-func (a *App) LoadAIConfig() (store.AIConfig, error) {
-	if a.settingsStore == nil {
-		return store.AIConfig{}, fmt.Errorf("settings store not initialized")
-	}
-	settings, err := a.settingsStore.Load()
-	if err != nil {
-		return store.AIConfig{}, err
-	}
-	// Return the active model's config
-	for _, m := range settings.AI.Models {
-		if m.ID == settings.AI.ActiveModelID {
-			return store.AIConfig{
-				APIKey:  m.APIKey,
-				BaseURL: m.BaseURL,
-				Model:   m.Model,
-			}, nil
-		}
-	}
-	return store.AIConfig{}, nil
-}
-
 // AI Session Store methods
 
 func (a *App) SaveAISessions(data store.AISessionData) error {
@@ -1331,6 +1439,8 @@ func (a *App) SaveSettings(settings store.AppSettings) error {
 	}
 	err := a.settingsStore.Save(settings)
 	if err == nil {
+		a.SetDefaultSessionLogDir(settings.Terminal.SessionLogDir)
+		a.setSessionLogFilename(settings.Terminal.SessionLogFilename)
 		a.triggerAutoSync()
 	}
 	return err
@@ -1341,6 +1451,26 @@ func (a *App) LoadSettings() (store.AppSettings, error) {
 		return store.AppSettings{}, fmt.Errorf("settings store not initialized")
 	}
 	return a.settingsStore.Load()
+}
+
+// AIConfigStore methods
+
+func (a *App) LoadAIModels() (store.AIStoreData, error) {
+	if a.aiConfigStore == nil {
+		return store.AIStoreData{}, fmt.Errorf("ai config store not initialized")
+	}
+	return a.aiConfigStore.Load()
+}
+
+func (a *App) SaveAIModels(cfg store.AIStoreData) error {
+	if a.aiConfigStore == nil {
+		return fmt.Errorf("ai config store not initialized")
+	}
+	err := a.aiConfigStore.Save(cfg)
+	if err == nil {
+		a.triggerAutoSync()
+	}
+	return err
 }
 
 // QuickCommandsStore methods
@@ -1362,7 +1492,6 @@ func (a *App) LoadQuickCommands() (store.QuickCommandData, error) {
 	}
 	return a.quickCommandsStore.Load()
 }
-
 
 // CommandsStore methods
 
@@ -1422,8 +1551,77 @@ func (a *App) SaveCommand(name, description, argumentHint, body string) error {
 	return a.commandsStore.SaveCommand(name, description, argumentHint, body)
 }
 
-func (a *App) OpenFileDialog() (string, error) {
-	return a.app.Dialog.OpenFile().SetTitle("Select File").PromptForSingleSelection()
+// expandDialogDir expands a leading "~" and returns dir only if it is an
+// existing absolute directory; otherwise it returns "".
+func expandDialogDir(dir string) string {
+	if dir == "~" || strings.HasPrefix(dir, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil || home == "" {
+			return ""
+		}
+		dir = filepath.Join(home, strings.TrimPrefix(strings.TrimPrefix(dir, "~"), "/"))
+	}
+	if dir == "" || !filepath.IsAbs(dir) {
+		return ""
+	}
+	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+		return ""
+	}
+	return dir
+}
+
+// resolveDialogDir picks the first candidate that is an existing directory,
+// falling back to the home directory. The platform pickers silently ignore a
+// non-existent directory URL and reopen at the OS-remembered "last location",
+// which on macOS is frequently somewhere with no visible route to ~/... (#947),
+// so the fallback has to be resolved here rather than left to the panel.
+func resolveDialogDir(candidates ...string) string {
+	for _, c := range candidates {
+		if dir := expandDialogDir(c); dir != "" {
+			return dir
+		}
+	}
+	home, _ := os.UserHomeDir()
+	return home
+}
+
+// openFileDialog builds an open-file picker that starts in a known-good
+// directory. Hidden files are revealed whenever the start directory is itself
+// inside a dot directory (~/.ssh, ~/.kube): the platform panels hide those
+// entries by default, so navigating up to home and back would otherwise leave
+// the target unreachable rather than merely hard to find.
+func (a *App) openFileDialog(title, startDir string) *application.OpenFileDialogStruct {
+	dir := resolveDialogDir(startDir)
+	return a.app.Dialog.OpenFile().
+		SetTitle(title).
+		SetDirectory(dir).
+		ShowHiddenFiles(hasHiddenSegment(dir))
+}
+
+// hasHiddenSegment reports whether any path segment starts with a dot, i.e.
+// whether reaching dir again by hand requires hidden files to be visible.
+func hasHiddenSegment(dir string) bool {
+	for _, seg := range strings.Split(filepath.ToSlash(dir), "/") {
+		if len(seg) > 1 && seg[0] == '.' {
+			return true
+		}
+	}
+	return false
+}
+
+// OpenFileDialog opens a single-file picker. startDir is optional and accepts
+// "~"-prefixed paths; it defaults to the home directory.
+func (a *App) OpenFileDialog(startDir ...string) (string, error) {
+	return a.openFileDialog("Select File", firstArg(startDir)).PromptForSingleSelection()
+}
+
+// firstArg unwraps the optional trailing argument the dialog bindings take, so
+// existing zero-argument callers keep working.
+func firstArg(args []string) string {
+	if len(args) > 0 {
+		return args[0]
+	}
+	return ""
 }
 
 // OpenPrivateKeyFile opens the private-key picker, reads the selected file's
@@ -1431,8 +1629,12 @@ func (a *App) OpenFileDialog() (string, error) {
 // content is validated before returning; a passphrase-protected key is accepted
 // (the user supplies its passphrase separately) but content that doesn't look
 // like a PEM private key is rejected with an immediate error.
+//
+// The picker starts in ~/.ssh with hidden files shown, since that is where keys
+// live and a dot directory is otherwise unreachable in the panel.
 func (a *App) OpenPrivateKeyFile() (string, error) {
-	path, err := a.app.Dialog.OpenFile().SetTitle("Select Private Key").PromptForSingleSelection()
+	path, err := a.openFileDialog("Select Private Key", "~/.ssh").
+		PromptForSingleSelection()
 	if err != nil {
 		return "", err
 	}
@@ -1482,42 +1684,71 @@ func looksLikePrivateKeyPEM(data []byte) bool {
 	return true
 }
 
+// OpenKubeconfigFile opens the kubeconfig picker, reads the selected file and
+// returns its text for pasting into the inline kubeconfig field. The content is
+// parsed as a kubeconfig before returning so obviously wrong files are rejected
+// up front; full connection validity is still checked when a context is loaded.
+// Starts in ~/.kube with hidden files shown, for the same reason as the key
+// picker.
+func (a *App) OpenKubeconfigFile() (string, error) {
+	path, err := a.openFileDialog("Select Kubeconfig", "~/.kube").
+		PromptForSingleSelection()
+	if err != nil {
+		return "", err
+	}
+	if path == "" {
+		// Picker cancelled — nothing to import.
+		return "", nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read kubeconfig: %w", err)
+	}
+	if _, err := k8s.ParseBytes(data); err != nil {
+		return "", utils.UserErr("invalid_kubeconfig")
+	}
+	return string(data), nil
+}
+
 // OpenFileDialogFiltered is like OpenFileDialog but restricts the picker to
 // a single extension filter (e.g. for importing a specific file format).
-func (a *App) OpenFileDialogFiltered(title, filterDisplayName, filterPattern string) (string, error) {
+func (a *App) OpenFileDialogFiltered(title, filterDisplayName, filterPattern string, startDir ...string) (string, error) {
 	return a.app.Dialog.OpenFileWithOptions(&application.OpenFileDialogOptions{
-		Title: title,
+		Title:     title,
+		Directory: resolveDialogDir(firstArg(startDir)),
 		Filters: []application.FileFilter{
 			{DisplayName: filterDisplayName, Pattern: filterPattern},
 		},
 	}).PromptForSingleSelection()
 }
 
-func (a *App) OpenMultipleFilesDialog() ([]string, error) {
-	return a.app.Dialog.OpenFile().SetTitle("Select Files").PromptForMultipleSelection()
+func (a *App) OpenMultipleFilesDialog(startDir ...string) ([]string, error) {
+	return a.openFileDialog("Select Files", firstArg(startDir)).
+		PromptForMultipleSelection()
 }
 
-func (a *App) OpenDirectoryDialog() (string, error) {
-	return a.app.Dialog.OpenFile().
-		SetTitle("Select Directory").
+func (a *App) OpenDirectoryDialog(startDir ...string) (string, error) {
+	return a.openFileDialog("Select Directory", firstArg(startDir)).
 		CanChooseDirectories(true).
 		CanChooseFiles(false).
 		PromptForSingleSelection()
 }
 
-func (a *App) SaveFileDialog(defaultName string) (string, error) {
+func (a *App) SaveFileDialog(defaultName string, startDir ...string) (string, error) {
 	return a.app.Dialog.SaveFileWithOptions(&application.SaveFileDialogOptions{
-		Title:    "Save File",
-		Filename: defaultName,
+		Title:     "Save File",
+		Filename:  defaultName,
+		Directory: resolveDialogDir(firstArg(startDir)),
 	}).PromptForSingleSelection()
 }
 
 // SaveFileDialogFiltered is like SaveFileDialog but restricts the picker to
 // a single extension filter (e.g. for exporting a specific file format).
-func (a *App) SaveFileDialogFiltered(title, defaultName, filterDisplayName, filterPattern string) (string, error) {
+func (a *App) SaveFileDialogFiltered(title, defaultName, filterDisplayName, filterPattern string, startDir ...string) (string, error) {
 	return a.app.Dialog.SaveFileWithOptions(&application.SaveFileDialogOptions{
-		Title:    title,
-		Filename: defaultName,
+		Title:     title,
+		Filename:  defaultName,
+		Directory: resolveDialogDir(firstArg(startDir)),
 		Filters: []application.FileFilter{
 			{DisplayName: filterDisplayName, Pattern: filterPattern},
 		},
@@ -1530,6 +1761,33 @@ func (a *App) GetDesktopPath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(homeDir, "Desktop"), nil
+}
+
+// GetDefaultSSHKeyPaths returns the local default SSH private-key paths for
+// the connection form's "use default" button. The standard OpenSSH names under
+// ~/.ssh are listed in preference order (id_ed25519, id_rsa, id_ecdsa,
+// id_dsa), and only the ones that exist are returned — the frontend cycles
+// through them on repeated clicks. When none exist it returns the
+// conventional ~/.ssh/id_rsa so the field still gets filled. Paths are always
+// absolute — "~" is never expanded at connect time, so a bare "~/.ssh/id_rsa"
+// would fail to read.
+func (a *App) GetDefaultSSHKeyPaths() []string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return nil
+	}
+	sshDir := filepath.Join(home, ".ssh")
+	var paths []string
+	for _, name := range []string{"id_ed25519", "id_rsa", "id_ecdsa", "id_dsa"} {
+		p := filepath.Join(sshDir, name)
+		if _, err := os.Stat(p); err == nil {
+			paths = append(paths, p)
+		}
+	}
+	if len(paths) == 0 {
+		paths = append(paths, filepath.Join(sshDir, "id_rsa"))
+	}
+	return paths
 }
 
 func (a *App) GetPlatform() string {
@@ -1578,6 +1836,44 @@ func (a *App) RelaunchApp() {
 
 func (a *App) CheckForUpdate(source string) (*update.UpdateInfo, error) {
 	return update.Check(Version, source)
+}
+
+// updateManager holds the in-progress update state (download → apply).
+var updateManager = update.NewManager()
+
+// emitUpdateProgress forwards update progress payloads to the frontend.
+func (a *App) emitUpdateProgress(p update.Progress) {
+	a.app.Event.Emit("update:progress", p)
+}
+
+// DownloadUpdate downloads and verifies the best available update asset from
+// the ordered candidate list (primary source first, mirror as fallback).
+// Progress is streamed to the frontend via the update:progress event.
+func (a *App) DownloadUpdate(assets []update.UpdateAsset) error {
+	if devBuild {
+		return fmt.Errorf("updates are disabled in development builds")
+	}
+	if len(assets) == 0 {
+		return fmt.Errorf("no update assets available")
+	}
+	_, err := updateManager.Download(assets, a.emitUpdateProgress)
+	return err
+}
+
+// ApplyUpdate installs the staged update and restarts the app. For Windows
+// installer-channel installs it spawns a detached updater that runs the new
+// NSIS installer after this process exits (the installer relaunches the app),
+// so it just quits instead of relaunching.
+func (a *App) ApplyUpdate() error {
+	if err := updateManager.Apply(a.emitUpdateProgress); err != nil {
+		return err
+	}
+	if update.DetectChannel() == update.ChannelInstaller {
+		a.app.Quit()
+		return nil
+	}
+	a.RelaunchApp()
+	return nil
 }
 
 // FrontendLog writes a frontend log message to the application log file.

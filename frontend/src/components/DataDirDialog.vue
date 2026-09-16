@@ -3,12 +3,12 @@
     :model-value="visible"
     @update:model-value="(v: boolean) => !v && onCancel()"
     :title="firstRun ? t('dataDir.title') : t('config.changeDir')"
-    width="520px"
+    width="32.5rem"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
     :show-close="!firstRun"
   >
-    <el-form label-width="100px" class="datadir-form">
+    <el-form label-width="6.25rem" class="datadir-form">
       <el-form-item :label="t('config.dataDir')">
         <el-select v-model="kind" style="width: 100%">
           <el-option :label="t('dataDir.default')" value="default" />
@@ -88,7 +88,7 @@ function onCancel() {
 </script>
 
 <style scoped>
-.datadir-form { display: flex; flex-direction: column; gap: 4px; }
-.datadir-custom { display: flex; gap: 8px; }
-.form-error { color: var(--el-color-danger); font-size: 13px; margin-top: 8px; }
+.datadir-form { display: flex; flex-direction: column; gap: 0.25rem; }
+.datadir-custom { display: flex; gap: 0.5rem; }
+.form-error { color: var(--el-color-danger); font-size: 0.8125rem; margin-top: 0.5rem; }
 </style>

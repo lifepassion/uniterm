@@ -2,7 +2,6 @@ package session
 
 import (
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -238,6 +237,11 @@ func (s *FTPSession) ChangeRemoteDir(dir string) (FileListResult, error) {
 }
 
 
+// Symlink is not supported: the FTP protocol has no link semantics.
+func (s *FTPSession) Symlink(_, _ string) error {
+	return fmt.Errorf("symlink is not supported by FTP")
+}
+
 func (s *FTPSession) MakeDir(dir string) error {
 	if err := s.requireClient(); err != nil {
 		return err
@@ -335,7 +339,6 @@ func (s *FTPSession) Get(remotePath, localPath string, recursive bool) (string, 
 				s.mu.Unlock()
 			}()
 			if err := s.downloadDir(rp, lp, task); err != nil {
-				task.Status = "error"
 				s.emitTransferEvent(task, err)
 				return
 			}
@@ -393,7 +396,6 @@ func (s *FTPSession) Put(localPath, remotePath string, recursive bool) (string, 
 				s.mu.Unlock()
 			}()
 			if err := s.uploadDir(lp, rp, task); err != nil {
-				task.Status = "error"
 				s.emitTransferEvent(task, err)
 				return
 			}
@@ -532,7 +534,7 @@ func (s *FTPSession) PauseTransfer(taskID string) error {
 	if !ok {
 		return fmt.Errorf("task not found: %s", taskID)
 	}
-	task.paused = true
+	task.setPaused(true)
 	task.Status = "paused"
 	s.emitTransferComplete(task)
 	return nil
@@ -546,7 +548,7 @@ func (s *FTPSession) ResumeTransfer(taskID string) error {
 	if !ok {
 		return fmt.Errorf("task not found: %s", taskID)
 	}
-	task.paused = false
+	task.setPaused(false)
 	task.Status = "running"
 	close(task.pauseCh)
 	task.pauseCh = make(chan struct{})
@@ -647,7 +649,6 @@ func (s *FTPSession) startTransfer(task *TransferTask) {
 		if task.Type == "download" {
 			resp, e := s.conn.Retr(task.RemotePath)
 			if e != nil {
-				task.Status = "error"
 				s.emitTransferEvent(task, e)
 				return
 			}
@@ -655,12 +656,11 @@ func (s *FTPSession) startTransfer(task *TransferTask) {
 
 			fi, e := s.conn.FileSize(task.RemotePath)
 			if e == nil && fi > 0 {
-				task.Total = fi
+				task.setTotal(fi)
 			}
 
 			localFile, e := os.Create(task.LocalPath)
 			if e != nil {
-				task.Status = "error"
 				s.emitTransferEvent(task, e)
 				return
 			}
@@ -670,7 +670,6 @@ func (s *FTPSession) startTransfer(task *TransferTask) {
 		} else {
 			localFile, e := os.Open(task.LocalPath)
 			if e != nil {
-				task.Status = "error"
 				s.emitTransferEvent(task, e)
 				return
 			}
@@ -678,14 +677,13 @@ func (s *FTPSession) startTransfer(task *TransferTask) {
 
 			fi, _ := localFile.Stat()
 			if fi != nil {
-				task.Total = fi.Size()
+				task.setTotal(fi.Size())
 			}
 
 			err = s.conn.Stor(task.RemotePath, &progressReader{r: localFile, task: task, s: s})
 		}
 
 		if err != nil {
-			task.Status = "error"
 			s.emitTransferEvent(task, err)
 			return
 		}
@@ -704,7 +702,7 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 	pr.task.waitIfPaused()
 	n, err := pr.r.Read(p)
 	if n > 0 {
-		pr.task.Progress += int64(n)
+		pr.task.addProgress(int64(n))
 		pr.s.emitTransferProgress(pr.task)
 	}
 	return n, err
@@ -793,7 +791,7 @@ func (s *FTPSession) transferFile(task *TransferTask, localPath, remotePath, tfT
 			n, e := resp.Read(buf)
 			if n > 0 {
 				dst.Write(buf[:n])
-				task.Progress += int64(n)
+				task.addProgress(int64(n))
 				s.emitTransferProgress(task)
 			}
 			if e != nil {
@@ -827,7 +825,7 @@ func (s *FTPSession) transferFile(task *TransferTask, localPath, remotePath, tfT
 					pw.Close()
 					return we
 				}
-				task.Progress += int64(n)
+				task.addProgress(int64(n))
 				s.emitTransferProgress(task)
 			}
 			if e != nil {
@@ -843,56 +841,3 @@ func (s *FTPSession) transferFile(task *TransferTask, localPath, remotePath, tfT
 	return nil
 }
 
-// --- Transfer event emitters ---
-
-func (s *FTPSession) emitTransferStart(task *TransferTask) {
-	name := filepath.Base(task.LocalPath)
-	if task.Type == "download" {
-		name = path.Base(task.RemotePath)
-	}
-	payload := map[string]interface{}{
-		"type":   "sftp:transfer",
-		"taskId": task.ID,
-		"event":  "start",
-		"tfType": task.Type,
-		"name":   name,
-		"total":  task.Total,
-	}
-	jsonBytes, _ := json.Marshal(payload)
-	s.emitData([]byte("\x1b]633;S" + string(jsonBytes) + "\x07"))
-}
-
-func (s *FTPSession) emitTransferProgress(task *TransferTask) {
-	payload := map[string]interface{}{
-		"type":     "sftp:transfer",
-		"taskId":   task.ID,
-		"event":    "progress",
-		"progress": task.Progress,
-		"total":    task.Total,
-	}
-	jsonBytes, _ := json.Marshal(payload)
-	s.emitData([]byte("\x1b]633;S" + string(jsonBytes) + "\x07"))
-}
-
-func (s *FTPSession) emitTransferComplete(task *TransferTask) {
-	payload := map[string]interface{}{
-		"type":   "sftp:transfer",
-		"taskId": task.ID,
-		"event":  "complete",
-		"status": task.Status,
-	}
-	jsonBytes, _ := json.Marshal(payload)
-	s.emitData([]byte("\x1b]633;S" + string(jsonBytes) + "\x07"))
-}
-
-func (s *FTPSession) emitTransferEvent(task *TransferTask, err error) {
-	payload := map[string]interface{}{
-		"type":   "sftp:transfer",
-		"taskId": task.ID,
-		"event":  "complete",
-		"status": "error",
-		"error":  err.Error(),
-	}
-	jsonBytes, _ := json.Marshal(payload)
-	s.emitData([]byte("\x1b]633;S" + string(jsonBytes) + "\x07"))
-}

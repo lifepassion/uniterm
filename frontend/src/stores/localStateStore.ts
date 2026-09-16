@@ -1,7 +1,27 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { LoadLocalState, SaveLocalState } from '../../bindings/github.com/ys-ll/uniterm/app'
-import { LocalState } from '../../bindings/github.com/ys-ll/uniterm/backend/store/models'
+
+// Shape of the backend's LocalState store (bindings are untyped JS, so the
+// type is declared here and must stay in sync with backend/store).
+interface LocalState {
+  sidebarVisible: boolean
+  aiSidebarVisible: boolean
+  collapsedGroupIds: string[]
+  collapsedQuickCommandGroupIds: string[]
+  windowX: number
+  windowY: number
+  windowWidth: number
+  windowHeight: number
+  windowMaximised: boolean
+  backgroundEnabled: boolean
+  backgroundImage: string
+  backgroundOpacity: number
+  backgroundBlur: number
+  backgroundFit: string
+  systemTitleBar: boolean
+  externalEditor: string
+}
 
 const DEFAULT: LocalState = {
   sidebarVisible: true,

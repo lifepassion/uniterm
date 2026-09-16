@@ -3,17 +3,17 @@
     append-to-body
     :model-value="visible"
     :title="proxy ? t('settings.editProxy') : t('settings.addProxy')"
-    width="480px"
+    width="30rem"
     @update:model-value="v => emit('update:visible', v)"
   >
-    <el-form label-width="90px">
+    <el-form label-width="5.625rem">
       <el-form-item :label="t('conn.name')">
         <el-input v-model="form.name" :placeholder="t('conn.namePlaceholder')" />
       </el-form-item>
       <el-form-item :label="t('conn.proxyType')">
         <el-radio-group v-model="form.kind">
-          <el-radio-button label="socks5">SOCKS5</el-radio-button>
-          <el-radio-button label="http">HTTP</el-radio-button>
+          <el-radio-button value="socks5">SOCKS5</el-radio-button>
+          <el-radio-button value="http">HTTP</el-radio-button>
         </el-radio-group>
       </el-form-item>
       <el-form-item :label="t('conn.host')">
@@ -37,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { reactive, watch } from 'vue'
 import { useI18n } from '../i18n'
 import { ElMessage } from 'element-plus'
 import { useProxyStore } from '../stores/proxyStore'

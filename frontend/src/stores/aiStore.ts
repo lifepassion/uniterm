@@ -1,9 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed, reactive, watch } from 'vue'
-import type { AIMessage, AIConfig, ExecutionMode, AISession, AIAgentStatus } from '../types/ai'
-import { SaveAIConfig, LoadAIConfig, SaveAISessions, LoadAISessions } from '../../bindings/github.com/ys-ll/uniterm/app'
+import type { AIMessage, ExecutionMode, AISession, AIAgentStatus } from '../types/ai'
+import { SaveAISessions, LoadAISessions } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useLocalStateStore } from './localStateStore'
-import { Events } from '@wailsio/runtime'
 import { t } from '../i18n'
 
 /**
@@ -118,12 +117,6 @@ For chained commands, classify based on the MOST risky operation in the chain.
 ❌ In PowerShell, do NOT run: bash -c "..."
 Use ONLY the current shell's native syntax.`
 
-const DEFAULT_CONFIG: AIConfig = {
-  apiKey: '',
-  baseURL: 'https://api.openai.com/v1',
-  model: 'gpt-4o'
-}
-
 async function loadSessionsFromBackend(): Promise<{ sessions: AISession[], currentSessionId: string | null }> {
   try {
     const data = await LoadAISessions() as any
@@ -152,7 +145,6 @@ export const useAIStore = defineStore('ai', () => {
   const visible = ref(false)
   const messages = ref<AIMessage[]>([])
   const mode = ref<ExecutionMode>('confirm_dangerous')
-  const config = ref<AIConfig>({ ...DEFAULT_CONFIG })
   const isRunning = ref(false)
   const status = ref<AIAgentStatus>('thinking')
   const stopRequested = ref(false)
@@ -331,7 +323,6 @@ export const useAIStore = defineStore('ai', () => {
   }
 
   async function init() {
-    await initConfig()
     const data = await loadSessionsFromBackend()
     sessions.value = data.sessions
       .filter(s => s.messages.length > 0)
@@ -368,36 +359,6 @@ export const useAIStore = defineStore('ai', () => {
     }
   }
 
-  async function initConfig() {
-    try {
-      const loaded = await LoadAIConfig()
-      if (loaded.apiKey || loaded.baseURL || loaded.model) {
-        config.value = {
-          apiKey: loaded.apiKey || DEFAULT_CONFIG.apiKey,
-          baseURL: loaded.baseURL || DEFAULT_CONFIG.baseURL,
-          model: loaded.model || DEFAULT_CONFIG.model,
-        }
-      }
-    } catch {
-      // ignore, use defaults
-    }
-  }
-
-  async function saveConfig() {
-    try {
-      await SaveAIConfig({
-        apiKey: config.value.apiKey,
-        baseURL: config.value.baseURL,
-        model: config.value.model,
-      })
-    } catch {
-      // ignore save errors
-    }
-  }
-
-  function setConfig(updates: Partial<AIConfig>) {
-    config.value = { ...config.value, ...updates }
-  }
 
   async function doSave() {
     try {
@@ -720,11 +681,6 @@ export const useAIStore = defineStore('ai', () => {
 
   const systemPrompt = computed(() => SYSTEM_RULES)
 
-  // Reload AI config when settings change via sync
- Events.On('store:settings:changed', () => {
-    initConfig()
-  })
-
   return {
     visible,
     toggle,
@@ -732,12 +688,8 @@ export const useAIStore = defineStore('ai', () => {
     addMessage, addSkillCard, addCommandCard,
     clearMessages,
     mode,
-    config,
     isRunning,
     status,
-    saveConfig,
-    initConfig,
-    setConfig,
     conversation,
     systemPrompt,
     stopRequested,

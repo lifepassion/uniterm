@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -135,7 +136,10 @@ func (ts *TunnelService) startListener(t Tunnel, exit *ssh.Client, quit chan str
 	case TunnelRemote:
 		ln, err := exit.Listen("tcp", bindAddr)
 		if err != nil {
-			return nil, fmt.Errorf("tunnel remote listen: %w", err)
+			// The common failure is the remote port already being bound — a
+			// stale sshd session that never tore its forward down, or another
+			// process on the server — so point the user there.
+			return nil, fmt.Errorf("tunnel remote listen: %w (check whether the port is already in use on the server by a stale session or another process)", err)
 		}
 		target := net.JoinHostPort(t.TargetHost, strconv.Itoa(t.TargetPort))
 		go acceptLoop(ln, quit, func(c net.Conn) {
@@ -151,6 +155,20 @@ func (ts *TunnelService) startListener(t Tunnel, exit *ssh.Client, quit chan str
 	default:
 		return nil, fmt.Errorf("unknown tunnel mode %q", t.Mode)
 	}
+}
+
+// TestTunnel validates a tunnel configuration without persisting or
+// registering it: the tunnel is brought up through the same path as StartTunnel
+// (SSH chain dial + auth, then listener bind — for remote mode that also proves
+// the port is free on the server) under a throwaway ID, and torn down
+// immediately once the listener is bound. Running means everything bound;
+// Error carries the reason. Throwaway-ID states never reach the UI (see
+// setState), so failures are reported only through the return value.
+func (ts *TunnelService) TestTunnel(t Tunnel, resolve ConnResolver) TunnelState {
+	t.ID = fmt.Sprintf("__test__%d", time.Now().UnixNano())
+	st := ts.StartTunnel(t, resolve)
+	ts.StopTunnel(t.ID)
+	return st
 }
 
 // StopTunnel tears down a running user tunnel (listener + whole ssh.Client
@@ -210,27 +228,33 @@ func (ts *TunnelService) dialChain(chain []ConnectionConfig, upstream *SocksProx
 
 	for i, cfg := range chain {
 		addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
+		authMethods, cleanup, err := makeSSHAuthMethodsForAttempt(cfg, nil)
+		if err != nil {
+			closeClients(clients)
+			return nil, nil, fmt.Errorf("ssh auth %s: %w", addr, err)
+		}
 
 		var raw net.Conn
-		var err error
 		if i == 0 {
 			raw, err = dialFirstHop(addr, upstream)
 		} else {
 			raw, err = prev.Dial("tcp", addr)
 		}
 		if err != nil {
+			cleanup()
 			closeClients(clients)
 			return nil, nil, fmt.Errorf("dial %s: %w", addr, err)
 		}
 
 		clientConfig := &ssh.ClientConfig{
 			User:            cfg.User,
-			Auth:            makeSSHAuthMethods(cfg, nil),
+			Auth:            authMethods,
 			Timeout:         30 * time.Second,
 			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 			Config:          sshAlgorithms(),
 		}
 		sshConn, chans, reqs, err := ssh.NewClientConn(raw, addr, clientConfig)
+		cleanup()
 		if err != nil {
 			raw.Close()
 			closeClients(clients)
@@ -368,6 +392,11 @@ func basicAuth(user, pass string) string {
 // setState records a tunnel's runtime state and notifies the callback (app.go
 // wires it to a Wails event). Returns the state for convenience.
 func (ts *TunnelService) setState(id string, st TunnelState) TunnelState {
+	// Throwaway IDs from TestTunnel never surface in the UI: no recording, no
+	// event — a failed test reports through its return value, not a toast.
+	if strings.HasPrefix(id, "__test__") {
+		return st
+	}
 	ts.mu.Lock()
 	ts.states[id] = st
 	cb := ts.onState
@@ -400,7 +429,7 @@ func (ts *TunnelService) TunnelStates() []TunnelState {
 // --- minimal SOCKS5 server (CONNECT only, no auth) for dynamic tunnels ---
 
 const (
-	socks5Success        = 0x00
+	socks5Success         = 0x00
 	socks5HostUnreachable = 0x04
 )
 

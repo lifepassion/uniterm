@@ -3,10 +3,19 @@ import { reactive } from 'vue'
 import type { Panel, PanelStatus, ConnectionConfig } from '../types/workspace'
 import { DisableSessionOutputLog, RegisterSessionForPanel, UnregisterSession } from '../../bindings/github.com/ys-ll/uniterm/app'
 
+export interface TransferFileState {
+  path: string
+  status: 'running' | 'done' | 'failed'
+}
+
 export interface TransferTaskUI {
   id: string
   type: 'upload' | 'download'
   name: string
+  // Full source/target paths from the backend's start payload — the retry
+  // spec round-trips these back to SftpRetryTransfer.
+  localPath: string
+  remotePath: string
   percentage: number
   speed: string
   eta: string
@@ -14,6 +23,12 @@ export interface TransferTaskUI {
   lastBytes: number
   lastTime: number
   total: number
+  // Directory-transfer detail (empty for single-file tasks).
+  fileCount: number
+  completedFiles: number
+  currentFile: string
+  files: TransferFileState[]
+  failedFiles: { path: string; error: string }[]
 }
 
 export interface VNCCache {
@@ -134,6 +149,10 @@ export const usePanelStore = defineStore('panel', () => {
     return panelState.transferTasks.get(panelId)!
   }
 
+  function removeTransferTasks(key: string) {
+    panelState.transferTasks.delete(key)
+  }
+
   function setProxyAddr(panelId: string, addr: string) {
     panelState.proxyAddrs.set(panelId, addr)
   }
@@ -202,6 +221,7 @@ export const usePanelStore = defineStore('panel', () => {
     proxyAddrs: panelState.proxyAddrs,
     vncCaches: panelState.vncCaches,
     getTransferTasks,
+    removeTransferTasks,
     createPanel,
     removePanel,
     getPanel,

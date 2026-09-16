@@ -1,7 +1,6 @@
 package session
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -155,6 +154,11 @@ func (s *WebDAVSession) ChangeRemoteDir(dir string) (FileListResult, error) {
 	return FileListResult{Files: files, Dir: target}, nil
 }
 
+// Symlink is not supported: WebDAV has no link resource type.
+func (s *WebDAVSession) Symlink(_, _ string) error {
+	return fmt.Errorf("symlink is not supported by WebDAV")
+}
+
 func (s *WebDAVSession) MakeDir(dir string) error {
 	if err := s.requireClient(); err != nil {
 		return err
@@ -295,7 +299,6 @@ func (s *WebDAVSession) Get(remotePath, localPath string, recursive bool) (strin
 			err = s.downloadFile(task, rp, lp)
 		}
 		if err != nil {
-			task.Status = "error"
 			s.emitTransferEvent(task, err)
 			return
 		}
@@ -343,7 +346,6 @@ func (s *WebDAVSession) Put(localPath, remotePath string, recursive bool) (strin
 			err = s.uploadFile(task, lp, rp)
 		}
 		if err != nil {
-			task.Status = "error"
 			s.emitTransferEvent(task, err)
 			return
 		}
@@ -373,7 +375,7 @@ func (s *WebDAVSession) PauseTransfer(taskID string) error {
 	if !ok {
 		return fmt.Errorf("task not found: %s", taskID)
 	}
-	task.paused = true
+	task.setPaused(true)
 	task.Status = "paused"
 	s.emitTransferComplete(task)
 	return nil
@@ -386,7 +388,7 @@ func (s *WebDAVSession) ResumeTransfer(taskID string) error {
 	if !ok {
 		return fmt.Errorf("task not found: %s", taskID)
 	}
-	task.paused = false
+	task.setPaused(false)
 	task.Status = "running"
 	close(task.pauseCh)
 	task.pauseCh = make(chan struct{})
@@ -417,9 +419,9 @@ func (s *WebDAVSession) calcWebdavRemoteDirSize(remoteDir string) (int64, error)
 
 func (s *WebDAVSession) downloadDir(remoteDir, localDir string, task *TransferTask) error {
 	// Calculate total size for progress tracking
-	if task.Total <= 0 {
+	if task.loadTotal() <= 0 {
 		if total, err := s.calcWebdavRemoteDirSize(remoteDir); err == nil {
-			task.Total = total
+			task.setTotal(total)
 		}
 	}
 	if err := os.MkdirAll(localDir, 0755); err != nil {
@@ -452,10 +454,10 @@ func (s *WebDAVSession) downloadDir(remoteDir, localDir string, task *TransferTa
 
 func (s *WebDAVSession) downloadFile(task *TransferTask, remotePath, localPath string) error {
 	// Get file size first for progress tracking
-	if task.Total <= 0 {
+	if task.loadTotal() <= 0 {
 		if fi, err := s.client.Stat(remotePath); err == nil {
 			if fi.Size() > 0 {
-				task.Total = fi.Size()
+				task.setTotal(fi.Size())
 			}
 		}
 	}
@@ -481,7 +483,7 @@ func (s *WebDAVSession) downloadFile(task *TransferTask, remotePath, localPath s
 		n, e := rc.Read(buf)
 		if n > 0 {
 			dst.Write(buf[:n])
-			task.Progress += int64(n)
+			task.addProgress(int64(n))
 			s.emitTransferProgress(task)
 		}
 		if e != nil {
@@ -495,9 +497,9 @@ func (s *WebDAVSession) downloadFile(task *TransferTask, remotePath, localPath s
 
 func (s *WebDAVSession) uploadDir(localDir, remoteDir string, task *TransferTask) error {
 	// Calculate total size for progress tracking
-	if task.Total <= 0 {
+	if task.loadTotal() <= 0 {
 		if total, err := calcLocalDirSize(localDir); err == nil {
-			task.Total = total
+			task.setTotal(total)
 		}
 	}
 
@@ -540,8 +542,8 @@ func (s *WebDAVSession) uploadFile(task *TransferTask, localPath, remotePath str
 		return err
 	}
 	// Set total size from file stat for progress tracking
-	if task.Total <= 0 && fi.Size() > 0 {
-		task.Total = fi.Size()
+	if task.loadTotal() <= 0 && fi.Size() > 0 {
+		task.setTotal(fi.Size())
 	}
 	pr, pw := io.Pipe()
 	errCh := make(chan error, 1)
@@ -565,7 +567,7 @@ func (s *WebDAVSession) uploadFile(task *TransferTask, localPath, remotePath str
 				return we
 			}
 			totalWritten += int64(n)
-			task.Progress += int64(n)
+			task.addProgress(int64(n))
 			s.emitTransferProgress(task)
 		}
 		if e != nil {
@@ -580,56 +582,3 @@ func (s *WebDAVSession) uploadFile(task *TransferTask, localPath, remotePath str
 	return <-errCh
 }
 
-// --- Transfer event emitters ---
-
-func (s *WebDAVSession) emitTransferStart(task *TransferTask) {
-	name := filepath.Base(task.LocalPath)
-	if task.Type == "download" {
-		name = path.Base(task.RemotePath)
-	}
-	payload := map[string]interface{}{
-		"type":   "sftp:transfer",
-		"taskId": task.ID,
-		"event":  "start",
-		"tfType": task.Type,
-		"name":   name,
-		"total":  task.Total,
-	}
-	jsonBytes, _ := json.Marshal(payload)
-	s.emitData([]byte("\x1b]633;S" + string(jsonBytes) + "\x07"))
-}
-
-func (s *WebDAVSession) emitTransferProgress(task *TransferTask) {
-	payload := map[string]interface{}{
-		"type":     "sftp:transfer",
-		"taskId":   task.ID,
-		"event":    "progress",
-		"progress": task.Progress,
-		"total":    task.Total,
-	}
-	jsonBytes, _ := json.Marshal(payload)
-	s.emitData([]byte("\x1b]633;S" + string(jsonBytes) + "\x07"))
-}
-
-func (s *WebDAVSession) emitTransferComplete(task *TransferTask) {
-	payload := map[string]interface{}{
-		"type":   "sftp:transfer",
-		"taskId": task.ID,
-		"event":  "complete",
-		"status": task.Status,
-	}
-	jsonBytes, _ := json.Marshal(payload)
-	s.emitData([]byte("\x1b]633;S" + string(jsonBytes) + "\x07"))
-}
-
-func (s *WebDAVSession) emitTransferEvent(task *TransferTask, err error) {
-	payload := map[string]interface{}{
-		"type":   "sftp:transfer",
-		"taskId": task.ID,
-		"event":  "complete",
-		"status": "error",
-		"error":  err.Error(),
-	}
-	jsonBytes, _ := json.Marshal(payload)
-	s.emitData([]byte("\x1b]633;S" + string(jsonBytes) + "\x07"))
-}

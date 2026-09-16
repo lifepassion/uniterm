@@ -8,6 +8,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useLocalStateStore } from '../stores/localStateStore'
 import type { CustomTerminalTheme } from '../types/settings'
 import { formatFontFamily } from '../utils/formatFontFamily'
+import { installImeCompatibilityPatch } from '../utils/xtermImeCompatibility'
 import {
   bufferRowSource,
   createLineRegistry,
@@ -57,6 +58,8 @@ export interface ManagedTerminal {
   /** Subscription to terminal.onResize — reflows the buffer, so the registry
    * must be re-keyed to the rows lines now start at. */
   resizeDispose: { dispose(): void } | null
+  /** IME compatibility patch installed on this terminal (macOS only). */
+  imeDispose: { dispose(): void } | null
 }
 
 const terminals = new Map<string, ManagedTerminal>()
@@ -166,6 +169,9 @@ export function acquireTerminal(
     // AFTER loadAddon — the unicode property is provided by the addon.
     terminal.unicode.activeVersion = '11'
 
+    // IME compatibility (macOS) is installed in attachTerminal, after
+    // terminal.open() — the patch needs textarea/_compositionHelper, which
+    // xterm only creates there.
     managed = {
       terminal,
       fitAddon,
@@ -181,6 +187,7 @@ export function acquireTerminal(
       lineOffset: 0,
       trimDispose: null,
       resizeDispose: null,
+      imeDispose: null,
     }
 
     // Track scrollback trimming so line-numbers / timestamps stay continuous
@@ -239,6 +246,8 @@ export function releaseTerminal(sessionId: string, ref: string): void {
       managed.trimDispose = null
       managed.resizeDispose?.dispose()
       managed.resizeDispose = null
+      managed.imeDispose?.dispose()
+      managed.imeDispose = null
       managed.terminal.dispose()
       terminals.delete(sessionId)
     }, 500)
@@ -255,6 +264,8 @@ export function disposeTerminal(sessionId: string): void {
   managed.trimDispose = null
   managed.resizeDispose?.dispose()
   managed.resizeDispose = null
+  managed.imeDispose?.dispose()
+  managed.imeDispose = null
   managed.terminal.dispose()
   terminals.delete(sessionId)
 }
@@ -290,6 +301,16 @@ export function attachTerminal(sessionId: string, container: HTMLElement): void 
     managed.terminal.open(container)
   } else {
     container.appendChild(managed.terminal.element)
+  }
+
+  // IME compatibility (macOS): deliver single-char input directly when an
+  // IME marks keystrokes with the phantom keyCode 229, instead of relying on
+  // xterm's racy deferred textarea diff that drops chars under fast typing.
+  // Must run after open() — that is where xterm creates the textarea and the
+  // composition helper the patch hooks into; installing at construction time
+  // silently no-ops.
+  if (!managed.imeDispose) {
+    managed.imeDispose = installImeCompatibilityPatch(managed.terminal)
   }
 
   // terminal.element only exists after open(), so the padding-ring color is

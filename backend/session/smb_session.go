@@ -2,12 +2,10 @@ package session
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -317,6 +315,12 @@ func (s *SMBSession) ChangeRemoteDir(dir string) (FileListResult, error) {
 	return s.ListRemote(target)
 }
 
+// Symlink is not supported: the SMB client library does not expose reparse
+// point creation.
+func (s *SMBSession) Symlink(_, _ string) error {
+	return fmt.Errorf("symlink is not supported by SMB")
+}
+
 func (s *SMBSession) MakeDir(dir string) error {
 	if err := s.requireShare(); err != nil {
 		return err
@@ -479,7 +483,6 @@ func (s *SMBSession) Get(remotePath, localPath string, recursive bool) (string, 
 			err = s.downloadFile(task, rp, lp)
 		}
 		if err != nil {
-			task.Status = "error"
 			s.emitTransferEvent(task, err)
 			return
 		}
@@ -528,7 +531,6 @@ func (s *SMBSession) Put(localPath, remotePath string, recursive bool) (string, 
 			err = s.uploadFile(task, lp, rp)
 		}
 		if err != nil {
-			task.Status = "error"
 			s.emitTransferEvent(task, err)
 			return
 		}
@@ -558,7 +560,7 @@ func (s *SMBSession) PauseTransfer(taskID string) error {
 	if !ok {
 		return fmt.Errorf("task not found: %s", taskID)
 	}
-	task.paused = true
+	task.setPaused(true)
 	task.Status = "paused"
 	s.emitTransferComplete(task)
 	return nil
@@ -571,7 +573,7 @@ func (s *SMBSession) ResumeTransfer(taskID string) error {
 	if !ok {
 		return fmt.Errorf("task not found: %s", taskID)
 	}
-	task.paused = false
+	task.setPaused(false)
 	task.Status = "running"
 	close(task.pauseCh)
 	task.pauseCh = make(chan struct{})
@@ -602,9 +604,9 @@ func (s *SMBSession) calcSmbRemoteDirSize(remoteDir string) (int64, error) {
 
 func (s *SMBSession) downloadDir(remoteDir, localDir string, task *TransferTask) error {
 	// Calculate total size for progress tracking
-	if task.Total <= 0 {
+	if task.loadTotal() <= 0 {
 		if total, err := s.calcSmbRemoteDirSize(remoteDir); err == nil {
-			task.Total = total
+			task.setTotal(total)
 		}
 	}
 
@@ -638,10 +640,10 @@ func (s *SMBSession) downloadDir(remoteDir, localDir string, task *TransferTask)
 
 func (s *SMBSession) downloadFile(task *TransferTask, remotePath, localPath string) error {
 	// Get file size first for progress tracking
-	if task.Total <= 0 {
+	if task.loadTotal() <= 0 {
 		if fi, err := s.share.Stat(remotePath); err == nil {
 			if fi.Size() > 0 {
-				task.Total = fi.Size()
+				task.setTotal(fi.Size())
 			}
 		}
 	}
@@ -667,7 +669,7 @@ func (s *SMBSession) downloadFile(task *TransferTask, remotePath, localPath stri
 		n, e := f.Read(buf)
 		if n > 0 {
 			dst.Write(buf[:n])
-			task.Progress += int64(n)
+			task.addProgress(int64(n))
 			s.emitTransferProgress(task)
 		}
 		if e != nil {
@@ -681,9 +683,9 @@ func (s *SMBSession) downloadFile(task *TransferTask, remotePath, localPath stri
 
 func (s *SMBSession) uploadDir(localDir, remoteDir string, task *TransferTask) error {
 	// Calculate total size for progress tracking
-	if task.Total <= 0 {
+	if task.loadTotal() <= 0 {
 		if total, err := calcLocalDirSize(localDir); err == nil {
-			task.Total = total
+			task.setTotal(total)
 		}
 	}
 
@@ -717,10 +719,10 @@ func (s *SMBSession) uploadDir(localDir, remoteDir string, task *TransferTask) e
 
 func (s *SMBSession) uploadFile(task *TransferTask, localPath, remotePath string) error {
 	// Get local file size first for progress tracking
-	if task.Total <= 0 {
+	if task.loadTotal() <= 0 {
 		if fi, err := os.Stat(localPath); err == nil {
 			if fi.Size() > 0 {
-				task.Total = fi.Size()
+				task.setTotal(fi.Size())
 			}
 		}
 	}
@@ -748,7 +750,7 @@ func (s *SMBSession) uploadFile(task *TransferTask, localPath, remotePath string
 			if _, we := dst.Write(buf[:n]); we != nil {
 				return we
 			}
-			task.Progress += int64(n)
+			task.addProgress(int64(n))
 			s.emitTransferProgress(task)
 		}
 		if e != nil {
@@ -760,56 +762,3 @@ func (s *SMBSession) uploadFile(task *TransferTask, localPath, remotePath string
 	}
 }
 
-// --- Transfer event emitters ---
-
-func (s *SMBSession) emitTransferStart(task *TransferTask) {
-	name := filepath.Base(task.LocalPath)
-	if task.Type == "download" {
-		name = path.Base(task.RemotePath)
-	}
-	payload := map[string]interface{}{
-		"type":   "sftp:transfer",
-		"taskId": task.ID,
-		"event":  "start",
-		"tfType": task.Type,
-		"name":   name,
-		"total":  task.Total,
-	}
-	jsonBytes, _ := json.Marshal(payload)
-	s.emitData([]byte("\x1b]633;S" + string(jsonBytes) + "\x07"))
-}
-
-func (s *SMBSession) emitTransferProgress(task *TransferTask) {
-	payload := map[string]interface{}{
-		"type":     "sftp:transfer",
-		"taskId":   task.ID,
-		"event":    "progress",
-		"progress": task.Progress,
-		"total":    task.Total,
-	}
-	jsonBytes, _ := json.Marshal(payload)
-	s.emitData([]byte("\x1b]633;S" + string(jsonBytes) + "\x07"))
-}
-
-func (s *SMBSession) emitTransferComplete(task *TransferTask) {
-	payload := map[string]interface{}{
-		"type":   "sftp:transfer",
-		"taskId": task.ID,
-		"event":  "complete",
-		"status": task.Status,
-	}
-	jsonBytes, _ := json.Marshal(payload)
-	s.emitData([]byte("\x1b]633;S" + string(jsonBytes) + "\x07"))
-}
-
-func (s *SMBSession) emitTransferEvent(task *TransferTask, err error) {
-	payload := map[string]interface{}{
-		"type":   "sftp:transfer",
-		"taskId": task.ID,
-		"event":  "complete",
-		"status": "error",
-		"error":  err.Error(),
-	}
-	jsonBytes, _ := json.Marshal(payload)
-	s.emitData([]byte("\x1b]633;S" + string(jsonBytes) + "\x07"))
-}

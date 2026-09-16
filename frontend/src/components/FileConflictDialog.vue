@@ -3,7 +3,7 @@
     append-to-body
     :model-value="visible"
     :title="t('sftp.dialog.conflictTitle')"
-    width="450px"
+    width="28.125rem"
     :close-on-click-modal="false"
     @update:model-value="(v: boolean) => emit('update:visible', v)"
   >
@@ -37,12 +37,12 @@ const emit = defineEmits<{
 
 <style scoped>
 .conflict-list {
-  max-height: 180px;
+  max-height: 11.25rem;
   overflow-y: auto;
-  margin: 8px 0 4px;
-  padding-left: 20px;
+  margin: 0.5rem 0 0.25rem;
+  padding-left: 1.25rem;
   font-family: var(--font-mono, monospace);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 </style>

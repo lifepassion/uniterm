@@ -2,7 +2,7 @@
   <el-dialog
     :model-value="true"
     :title="t('settings.skillsCreateTitle')"
-    width="540px"
+    width="33.75rem"
     @close="$emit('close')"
   >
     <div class="skill-create-body">
@@ -21,14 +21,14 @@
           @change="onFileChange"
         />
         <template v-if="!uploadFile">
-          <FileUp :size="24" class="upload-icon" />
+          <FileUp :size="'1.5rem'" class="upload-icon" />
           <p class="upload-hint">{{ t('settings.skillsUploadHint') }}</p>
         </template>
         <template v-else>
-          <FileUp :size="24" class="upload-icon" />
+          <FileUp :size="'1.5rem'" class="upload-icon" />
           <p class="upload-file-name">{{ uploadFile }}</p>
           <p v-if="parseState === 'ok'" class="parse-ok">
-            <CircleCheck :size="14" /> {{ t('settings.skillsParseOk') }}
+            <CircleCheck :size="'0.875rem'" /> {{ t('settings.skillsParseOk') }}
           </p>
           <p v-else-if="parseState === 'fail'" class="parse-fail">
             {{ parseError }}
@@ -42,7 +42,7 @@
         <span class="import-hint">{{ t('settings.skillsImportFolderHint') }}</span>
       </div>
 
-      <el-form label-position="right" label-width="72px" size="small">
+      <el-form label-position="right" label-width="4.5rem" size="small">
         <el-form-item required :label="t('settings.skillsName')">
           <el-input
             v-model="form.name"
@@ -250,16 +250,16 @@ async function importDir() {
 .skill-create-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0.75rem;
 }
 .upload-zone {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   border: 1px dashed var(--el-border-color);
-  border-radius: 8px;
-  padding: 24px;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
   text-align: center;
   cursor: pointer;
   transition: border-color 0.15s;
@@ -267,10 +267,10 @@ async function importDir() {
 .import-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .import-hint {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--el-text-color-secondary);
 }
 .upload-zone:hover {
@@ -287,11 +287,11 @@ async function importDir() {
 }
 .upload-hint {
   color: var(--el-text-color-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   margin: 0;
 }
 .upload-file-name {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--el-text-color-primary);
   margin: 0;
@@ -299,18 +299,18 @@ async function importDir() {
 .parse-ok {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  gap: 0.25rem;
+  font-size: 0.75rem;
   color: var(--el-color-success);
   margin: 0;
 }
 .parse-fail {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--el-color-danger);
   margin: 0;
 }
 .security-tip {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--el-color-warning);
   margin: 0;
 }

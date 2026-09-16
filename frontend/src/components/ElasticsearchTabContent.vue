@@ -6,10 +6,10 @@
         <div class="search-wrap">
           <input v-model="treeSearchQuery" class="search-input" :placeholder="t('es.searchIndices')" />
           <button class="btn btn-ghost btn-icon btn-sm" :title="t('es.refresh')" @click="loadIndices">
-            <RefreshCw :size="14" />
+            <RefreshCw :size="'0.875rem'" />
           </button>
           <button class="btn btn-ghost btn-icon btn-sm" :title="t('common.more')" @click.stop="moreMenuRef?.toggle($event.currentTarget)">
-            <MoreHorizontal :size="14" />
+            <MoreHorizontal :size="'0.875rem'" />
           </button>
           <Menu ref="moreMenuRef" v-model:visible="moreMenuVisible" align="end">
             <MenuItem @click="onMoreToggleSystem">{{ (hideSystemIndices ? '✓ ' : '') + t('es.hideSystem') }}</MenuItem>
@@ -28,7 +28,7 @@
               @contextmenu.prevent="onClusterContextMenu"
             >
               <span class="db-arrow" @click.stop="clusterExpanded = !clusterExpanded">
-                <component :is="clusterExpanded ? ChevronDown : ChevronRight" :size="12" />
+                <component :is="clusterExpanded ? ChevronDown : ChevronRight" :size="'0.75rem'" />
               </span>
               <span class="health-dot" :class="healthStatus" />
               <span class="cluster-root-name" :title="clusterTooltip">{{ clusterName }}</span>
@@ -75,7 +75,7 @@
                 @dragend="clearTabDragState"
                 @drop.prevent="onTabDrop($event, index)"
               >
-                <component :is="tab.kind === 'cluster' ? Database : Layers" :size="12" class="tab-icon" />
+                <component :is="tab.kind === 'cluster' ? Database : Layers" :size="'0.75rem'" class="tab-icon" />
                 <span class="tab-title">{{ tabTitle(tab) }}</span>
                 <button class="tab-close" :title="t('tab.close')" @click.stop="closeTab(tab.id)">×</button>
               </div>
@@ -88,7 +88,7 @@
             :title="t('tab.more')"
             @click.stop="moreTabsMenuRef?.toggle($event.currentTarget)"
           >
-            <MoreHorizontal :size="14" />
+            <MoreHorizontal :size="'0.875rem'" />
           </button>
           <Menu ref="moreTabsMenuRef" v-model:visible="moreTabsMenuVisible" align="end">
             <MenuItem
@@ -177,7 +177,7 @@
                   @click="hideSystemIndices = !hideSystemIndices"
                 >{{ (hideSystemIndices ? '✓ ' : '') + t('es.hideSystem') }}</button>
                 <button class="btn btn-default btn-sm" @click="onClusterNewIndex">
-                  <Plus :size="14" /> {{ t('es.newIndex') }}
+                  <Plus :size="'0.875rem'" /> {{ t('es.newIndex') }}
                 </button>
               </div>
               <el-table
@@ -188,31 +188,31 @@
                 class="db-result-table"
                 :empty-text="t('db.noData')"
               >
-                <el-table-column prop="name" :label="t('es.indexName')" min-width="180" show-overflow-tooltip>
+                <el-table-column prop="name" :label="t('es.indexName')" :min-width="uiPx(180)" show-overflow-tooltip>
                   <template #default="{ row }">
                     <span class="object-name" @click="openIndexTab(row.name)">
-                      <Layers :size="14" class="object-icon" />
+                      <Layers :size="'0.875rem'" class="object-icon" />
                       {{ row.name }}
                     </span>
                   </template>
                 </el-table-column>
-                <el-table-column prop="health" :label="t('es.health')" width="90" />
-                <el-table-column prop="status" :label="t('es.status')" width="90" />
-                <el-table-column :label="t('es.docsCount')" width="100">
+                <el-table-column prop="health" :label="t('es.health')" :width="uiPx(90)" />
+                <el-table-column prop="status" :label="t('es.status')" :width="uiPx(90)" />
+                <el-table-column :label="t('es.docsCount')" :width="uiPx(100)">
                   <template #default="{ row }">{{ formatDocs(row.docsCount) }}</template>
                 </el-table-column>
-                <el-table-column prop="storeSize" :label="t('es.storeSize')" width="110" />
-                <el-table-column :label="t('es.shards')" width="90">
+                <el-table-column prop="storeSize" :label="t('es.storeSize')" :width="uiPx(110)" />
+                <el-table-column :label="t('es.shards')" :width="uiPx(90)">
                   <template #default="{ row }">{{ row.pri }} / {{ row.rep }}</template>
                 </el-table-column>
-                <el-table-column :label="t('common.actions')" width="80" align="right">
+                <el-table-column :label="t('common.actions')" :width="uiPx(80)" align="right">
                   <template #default="{ row }">
                     <button
                       class="btn btn-ghost btn-icon btn-sm danger"
                       :title="t('es.deleteIndex')"
                       @click.stop="ctxDeleteIndex(row)"
                     >
-                      <Trash2 :size="14" />
+                      <Trash2 :size="'0.875rem'" />
                     </button>
                   </template>
                 </el-table-column>
@@ -223,7 +223,7 @@
             <!-- REST sub-tab -->
             <div v-else class="rest-section">
               <div class="rest-toolbar">
-                <el-select v-model="restMethod" style="width:110px" size="small">
+                <el-select v-model="restMethod" style="width:6.875rem" size="small">
                   <el-option v-for="m in restMethods" :key="m" :label="m" :value="m" />
                 </el-select>
                 <input v-model="restPath" class="rest-path" placeholder="/_cluster/health" @keydown.enter="runRest" />
@@ -274,8 +274,8 @@
     </Menu>
 
     <!-- Create index dialog -->
-    <el-dialog v-model="createIndexVisible" :title="t('es.newIndex')" width="520px" destroy-on-close>
-      <el-form label-width="80px">
+    <el-dialog v-model="createIndexVisible" :title="t('es.newIndex')" width="32.5rem" destroy-on-close>
+      <el-form label-width="5rem">
         <el-form-item :label="t('es.indexName')" required>
           <el-input v-model="newIndexName" />
         </el-form-item>
@@ -293,7 +293,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { RefreshCw, Layers, Code2, MoreHorizontal, ChevronRight, ChevronDown, Database, Plus, Trash2 } from '@lucide/vue'
+import { RefreshCw, Layers, MoreHorizontal, ChevronRight, ChevronDown, Database, Plus, Trash2 } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import { msg } from '../services/message'
 import { ElMessageBox } from 'element-plus'
@@ -302,6 +302,7 @@ import SyntaxEditor from './SyntaxEditor.vue'
 import MenuItem from './MenuItem.vue'
 import MenuDivider from './MenuDivider.vue'
 import ElasticsearchIndexView from './ElasticsearchIndexView.vue'
+import { uiPx } from '../utils/uiScale'
 import {
   EsClusterInfo,
   EsClusterHealth,
@@ -771,8 +772,8 @@ function onResizeStart(e: MouseEvent) {
 }
 .health-dot {
   display: inline-block;
-  width: 8px;
-  height: 8px;
+  width: 0.5rem;
+  height: 0.5rem;
   border-radius: 50%;
   flex-shrink: 0;
   background: var(--text-disabled);
@@ -798,15 +799,15 @@ function onResizeStart(e: MouseEvent) {
 .search-wrap {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
 }
 .search-input {
   flex: 1;
   min-width: 0;
   font-family: var(--font-ui);
-  font-size: 12px;
-  padding: 6px 8px;
+  font-size: 0.75rem;
+  padding: 0.375rem 0.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-base);
@@ -821,8 +822,8 @@ function onResizeStart(e: MouseEvent) {
 .cluster-root {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
+  gap: 0.25rem;
+  padding: 0.375rem 0.5rem;
   cursor: pointer;
   user-select: none;
   transition: background 0.12s ease;
@@ -830,7 +831,7 @@ function onResizeStart(e: MouseEvent) {
 .cluster-root:hover { background: var(--bg-hover); }
 .cluster-root.selected { background: var(--bg-hover); }
 .db-arrow {
-  width: 12px;
+  width: 0.75rem;
   flex-shrink: 0;
   color: var(--text-muted);
   display: flex;
@@ -847,27 +848,27 @@ function onResizeStart(e: MouseEvent) {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-primary);
 }
 .child-list {
-  padding-bottom: 4px;
+  padding-bottom: 0.25rem;
 }
 .child-list .index-item {
-  padding-left: 44px;
+  padding-left: 2.75rem;
 }
 .tree-loading {
-  padding: 12px;
+  padding: 0.75rem;
   text-align: center;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .index-item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
+  gap: 0.25rem;
+  padding: 0.375rem 0.5rem;
   cursor: pointer;
   user-select: none;
   transition: background 0.12s ease;
@@ -881,21 +882,21 @@ function onResizeStart(e: MouseEvent) {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .index-meta {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   flex-shrink: 0;
 }
 .empty-hint, .select-hint {
-  padding: 16px;
+  padding: 1rem;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
   text-align: center;
 }
 .es-resizer {
-  width: 4px;
+  width: 0.25rem;
   cursor: col-resize;
   background: transparent;
   flex-shrink: 0;
@@ -915,7 +916,7 @@ function onResizeStart(e: MouseEvent) {
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-elevated);
   flex-shrink: 0;
-  min-height: 32px;
+  min-height: 2rem;
 }
 .es-tab-scroll {
   display: flex;
@@ -924,25 +925,25 @@ function onResizeStart(e: MouseEvent) {
   flex: 1;
   min-width: 0;
 }
-.es-tab-scroll::-webkit-scrollbar { height: 4px; }
+.es-tab-scroll::-webkit-scrollbar { height: 0.25rem; }
 .es-tab-indicator {
-  width: 2px;
-  min-width: 2px;
+  width: 0.125rem;
+  min-width: 0.125rem;
   align-self: stretch;
   background: var(--accent);
   opacity: 0.8;
-  margin: 4px 0;
+  margin: 0.25rem 0;
 }
 .es-tab-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  max-width: 180px;
-  padding: 6px 8px 6px 12px;
+  gap: 0.375rem;
+  max-width: 11.25rem;
+  padding: 0.375rem 0.5rem 0.375rem 0.75rem;
   border-right: 1px solid var(--border-subtle);
   cursor: pointer;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   white-space: nowrap;
   flex-shrink: 0;
@@ -955,20 +956,20 @@ function onResizeStart(e: MouseEvent) {
 .es-tab-item.active {
   background: var(--bg-base);
   color: var(--text-primary);
-  box-shadow: inset 0 -2px 0 var(--accent);
+  box-shadow: inset 0 -0.125rem 0 var(--accent);
 }
 .tab-icon { flex-shrink: 0; opacity: 0.8; }
 .tab-title { overflow: hidden; text-overflow: ellipsis; }
 .tab-close {
-  width: 16px;
-  height: 16px;
-  line-height: 14px;
+  width: 1rem;
+  height: 1rem;
+  line-height: 0.875rem;
   border: none;
   background: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 14px;
-  border-radius: 3px;
+  font-size: 0.875rem;
+  border-radius: 0.1875rem;
   flex-shrink: 0;
 }
 .tab-close:hover {
@@ -976,7 +977,7 @@ function onResizeStart(e: MouseEvent) {
   background: var(--bg-hover);
 }
 .es-tab-more {
-  width: 28px;
+  width: 1.75rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1002,7 +1003,7 @@ function onResizeStart(e: MouseEvent) {
 .cluster-panel {
   flex: 1;
   overflow: auto;
-  padding: 12px;
+  padding: 0.75rem;
   display: flex;
   flex-direction: column;
 }
@@ -1011,19 +1012,19 @@ function onResizeStart(e: MouseEvent) {
   align-items: center;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
-  padding: 0 12px;
-  min-height: 32px;
-  margin: -12px -12px 0;
+  padding: 0 0.75rem;
+  min-height: 2rem;
+  margin: -0.75rem -0.75rem 0;
 }
 .cluster-subtab {
-  padding: 6px 16px;
+  padding: 0.375rem 1rem;
   border: none;
   background: none;
   color: var(--text-secondary);
   cursor: pointer;
   font-family: var(--font-ui);
-  font-size: 13px;
-  border-bottom: 2px solid transparent;
+  font-size: 0.8125rem;
+  border-bottom: 0.125rem solid transparent;
   transition: all 0.15s ease;
 }
 .cluster-subtab:hover {
@@ -1043,48 +1044,48 @@ function onResizeStart(e: MouseEvent) {
   --el-table-header-text-color: var(--text-secondary);
   --el-table-text-color: var(--text-primary);
   --el-table-bg-color: var(--bg-surface);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .cluster-panel-body {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-top: 12px;
+  gap: 1rem;
+  margin-top: 0.75rem;
 }
 .cluster-section-title {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0.75rem;
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 8px;
+  margin-bottom: 0.5rem;
 }
 .cluster-section-title .section-action { margin-left: auto; }
 .object-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 .object-toolbar .btn:last-child { margin-left: auto; }
 .object-search {
-  width: 240px;
-  padding: 4px 8px;
+  width: 15rem;
+  padding: 0.25rem 0.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   outline: none;
 }
 .object-search:focus { border-color: var(--accent); }
 .object-name {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   cursor: pointer;
   transition: color 0.15s ease;
 }
@@ -1095,26 +1096,26 @@ function onResizeStart(e: MouseEvent) {
 }
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(11.25rem, 1fr));
+  gap: 0.5rem;
 }
 .info-item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px;
+  gap: 0.125rem;
+  padding: 0.5rem 0.625rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-surface);
 }
 .info-label {
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
 }
 .info-value {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary);
 }
 
@@ -1123,20 +1124,20 @@ function onResizeStart(e: MouseEvent) {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 8px;
-  gap: 8px;
+  padding: 0.5rem;
+  gap: 0.5rem;
 }
 .rest-toolbar {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
   align-items: center;
   flex-shrink: 0;
 }
 .rest-path {
   flex: 1;
   font-family: var(--font-mono);
-  font-size: 13px;
-  padding: 6px 8px;
+  font-size: 0.8125rem;
+  padding: 0.375rem 0.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-base);
@@ -1144,7 +1145,7 @@ function onResizeStart(e: MouseEvent) {
   outline: none;
 }
 .rest-body {
-  height: 140px;
+  height: 8.75rem;
   flex-shrink: 0;
 }
 .rest-result {
@@ -1153,22 +1154,22 @@ function onResizeStart(e: MouseEvent) {
   overflow: auto;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  padding: 8px;
+  padding: 0.5rem;
   background: var(--bg-elevated);
 }
 .rest-status {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
-  margin-bottom: 6px;
+  margin-bottom: 0.375rem;
   color: var(--text-secondary);
 }
 
 .doc-editor {
   width: 100%;
-  height: 320px;
+  height: 20rem;
 }
 .doc-editor.index-body {
-  height: 180px;
+  height: 11.25rem;
 }
 
 </style>

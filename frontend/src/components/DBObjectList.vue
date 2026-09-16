@@ -7,25 +7,25 @@
         :placeholder="t('db.searchTables')"
       />
       <button class="btn btn-default btn-sm" @click="openNewTable">
-        <Plus :size="14" /> {{ t('db.newTable') }}
+        <Plus :size="'0.875rem'" /> {{ t('db.newTable') }}
       </button>
     </div>
     <el-table
       :data="filtered"
       size="small"
       v-loading="loading"
-      height="calc(100% - 44px)"
+      height="calc(100% - 2.75rem)"
       class="object-table"
     >
       <el-table-column :label="t('db.colName')" prop="name" sortable>
         <template #default="{ row }">
           <span class="object-name" @click="onRowClick(row)">
-            <component :is="row.type === 'view' ? Eye : Table2" :size="14" class="object-icon" />
+            <component :is="row.type === 'view' ? Eye : Table2" :size="'0.875rem'" class="object-icon" />
             {{ row.name }}
           </span>
         </template>
       </el-table-column>
-      <el-table-column :label="t('db.colType')" prop="type" sortable width="100">
+      <el-table-column :label="t('db.colType')" prop="type" sortable :width="uiPx(100)">
         <template #default="{ row }">
           {{ row.type === 'view' ? t('db.typeView') : t('db.typeTable') }}
         </template>
@@ -33,10 +33,10 @@
       <el-table-column
         :label="t('db.colComment')"
         prop="comment"
-        min-width="160"
+        :min-width="uiPx(160)"
         show-overflow-tooltip
       />
-      <el-table-column :label="t('db.actions')" width="110" align="right">
+      <el-table-column :label="t('db.actions')" :width="uiPx(110)" align="right">
         <template #default="{ row }">
           <button
             v-if="row.type === 'view'"
@@ -44,14 +44,14 @@
             :title="t('db.dropView')"
             @click.stop="askDropView(row)"
           >
-            <Trash2 :size="14" />
+            <Trash2 :size="'0.875rem'" />
           </button>
           <template v-else>
             <button class="btn btn-ghost btn-icon btn-sm" :title="t('db.truncateTable')" @click.stop="askTruncate(row)">
-              <Eraser :size="14" />
+              <Eraser :size="'0.875rem'" />
             </button>
             <button class="btn btn-ghost btn-icon btn-sm danger" :title="t('db.dropTable')" @click.stop="askDrop(row)">
-              <Trash2 :size="14" />
+              <Trash2 :size="'0.875rem'" />
             </button>
           </template>
         </template>
@@ -59,7 +59,7 @@
     </el-table>
 
     <!-- Confirm dialog (type-to-confirm), mirrors the tree context menu -->
-    <el-dialog append-to-body v-model="confirmVisible" :title="confirmTitle" width="420px">
+    <el-dialog append-to-body v-model="confirmVisible" :title="confirmTitle" width="26.25rem">
       <div class="confirm-body">
         <p class="confirm-text">{{ confirmText }}</p>
         <p class="confirm-hint">{{ t('db.typeToConfirm', { name: confirmName }) }}</p>
@@ -74,8 +74,8 @@
     </el-dialog>
 
     <!-- New Table dialog -->
-    <el-dialog append-to-body v-model="newTableVisible" :title="t('db.newTable')" width="380px">
-      <el-form label-width="80px">
+    <el-dialog append-to-body v-model="newTableVisible" :title="t('db.newTable')" width="23.75rem">
+      <el-form label-width="5rem">
         <el-form-item :label="t('db.tableName')">
           <el-input v-model="newTableName" />
         </el-form-item>
@@ -97,6 +97,7 @@ import { useI18n } from '../i18n'
 import { GetTables, CreateTable, DropTable, DropView, TruncateTable } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
 import type { TableInfo } from '../types/database'
+import { uiPx } from '../utils/uiScale'
 
 defineOptions({ name: 'DBObjectList' })
 
@@ -243,19 +244,19 @@ async function onCreateTable() {
 .object-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
   flex-shrink: 0;
 }
 .object-search {
-  width: 240px;
-  padding: 4px 8px;
+  width: 15rem;
+  padding: 0.25rem 0.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   outline: none;
   transition: border-color 0.15s ease;
 }
@@ -274,7 +275,7 @@ async function onCreateTable() {
 .object-name {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   cursor: pointer;
   transition: color 0.15s ease;
 }
@@ -288,17 +289,17 @@ async function onCreateTable() {
 .confirm-body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .confirm-text {
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-primary);
   margin: 0;
 }
 .confirm-hint {
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
   margin: 0;
 }

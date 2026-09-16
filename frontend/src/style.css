@@ -41,6 +41,9 @@
   --success-glow: rgba(52, 211, 153, 0.15);
   --warning: #f59e0b;
   --warning-subtle: rgba(245, 158, 11, 0.1);
+  --warning-tab: rgba(245, 158, 11, 0.18);
+  --warning-tab-hover: rgba(245, 158, 11, 0.26);
+  --warning-tab-active: rgba(245, 158, 11, 0.24);
   --error: #f87171;
   --error-subtle: rgba(248, 113, 113, 0.06);
   --error-glow: rgba(248, 113, 113, 0.15);
@@ -50,9 +53,9 @@
   --border-hover: rgba(255, 255, 255, 0.14);
 
   /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 1px 0.125rem rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.5);
 
   /* Scrim - dim-out mask for loading/drop overlays. Dark themes use a
      translucent black; light theme overrides to translucent white so the
@@ -64,9 +67,9 @@
   --font-mono: 'JetBrains Mono Variable', monospace;
 
   /* Spacing */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
 
   /* Scrollbar */
   --scrollbar-thumb: rgba(255, 255, 255, 0.18);
@@ -97,8 +100,18 @@
   --el-mask-color: var(--scrim);
 
   /* Element Plus sizing */
-  --el-input-height: 28px;
-  --el-component-size: 28px;
+  --el-input-height: 1.75rem;
+  --el-component-size: 1.75rem;
+
+  /* Element Plus font sizes: rem-based so EP text (tables, dialogs, etc.)
+     follows the UI font size setting applied to the rem root. Baseline is
+     1rem = 16px; EP ships these as fixed px which never scales. */
+  --el-font-size-extra-small: 0.75rem;
+  --el-font-size-small: 0.8125rem;
+  --el-font-size-base: 0.875rem;
+  --el-font-size-medium: 0.875rem;
+  --el-font-size-large: 1.125rem;
+  --el-font-size-extra-large: 1.25rem;
 }
 
 /* Deep blue - oceanic dark */
@@ -135,6 +148,9 @@
   --success-glow: rgba(52, 211, 153, 0.15);
   --warning: #f59e0b;
   --warning-subtle: rgba(245, 158, 11, 0.1);
+  --warning-tab: rgba(245, 158, 11, 0.18);
+  --warning-tab-hover: rgba(245, 158, 11, 0.26);
+  --warning-tab-active: rgba(245, 158, 11, 0.24);
   --error: #f87171;
   --error-subtle: rgba(248, 113, 113, 0.06);
   --error-glow: rgba(248, 113, 113, 0.15);
@@ -142,9 +158,9 @@
   --border-subtle: rgba(255, 255, 255, 0.08);
   --border-hover: rgba(255, 255, 255, 0.14);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+  --shadow-sm: 0 1px 0.125rem rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.6);
 
   --el-bg-color: #0b111e;
   --el-bg-color-page: #0b111e;
@@ -160,8 +176,8 @@
   --el-border-color-light: rgba(255, 255, 255, 0.1);
   --el-border-color-lighter: rgba(255, 255, 255, 0.08);
 
-  --el-input-height: 28px;
-  --el-component-size: 28px;
+  --el-input-height: 1.75rem;
+  --el-component-size: 1.75rem;
 }
 
 [data-theme="light"] {
@@ -203,6 +219,9 @@
   --success-glow: rgba(16, 124, 65, 0.15);
   --warning: #e07b00;
   --warning-subtle: rgba(224, 123, 0, 0.08);
+  --warning-tab: rgba(224, 123, 0, 0.16);
+  --warning-tab-hover: rgba(224, 123, 0, 0.24);
+  --warning-tab-active: rgba(224, 123, 0, 0.22);
   --error: #d13438;
   --error-subtle: rgba(209, 52, 56, 0.06);
   --error-glow: rgba(209, 52, 56, 0.15);
@@ -215,9 +234,9 @@
   --scrim: rgba(255, 255, 255, 0.6);
 
   /* Shadows - cleaner, deeper */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.1);
+  --shadow-sm: 0 1px 0.1875rem rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 0.25rem 0.875rem rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 0.5rem 1.75rem rgba(0, 0, 0, 0.1);
 
   /* Element Plus light theme overrides */
   --el-bg-color: #ffffff;
@@ -234,8 +253,8 @@
   --el-border-color-light: rgba(0, 0, 0, 0.08);
   --el-border-color-lighter: rgba(0, 0, 0, 0.06);
 
-  --el-input-height: 28px;
-  --el-component-size: 28px;
+  --el-input-height: 1.75rem;
+  --el-component-size: 1.75rem;
 
   /* Scrollbar */
   --scrollbar-thumb: rgba(0, 0, 0, 0.22);
@@ -246,6 +265,18 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+/* Root rem baseline. All UI lengths are rem-based with 1rem = 16px (the
+   browser UA default; 16 = 2^4, so every integer px value converts to an
+   exact decimal). index.html tags <html class="mac"> on macOS, where the
+   design baseline (12px body text) is scaled to 14px for a roomier feel
+   close to native density: 16 x 14/12 = 18.6667px. */
+html {
+  font-size: 16px;
+}
+html.mac {
+  font-size: 18.6667px;
 }
 
 html, body, #app {
@@ -260,8 +291,6 @@ body {
   font-family: var(--font-ui);
   background: var(--bg-base);
   color: var(--text-primary);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -294,7 +323,7 @@ body::before {
   opacity: 0.015;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-repeat: repeat;
-  background-size: 128px;
+  background-size: 8rem;
 }
 
 [data-theme="light"] body::before {
@@ -303,15 +332,15 @@ body::before {
 
 /* Scrollbar - minimal */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 0.5rem;
+  height: 0.5rem;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: 10px;
+  border-radius: 0.625rem;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover);
@@ -325,10 +354,10 @@ body::before {
    ::-webkit-scrollbar 规则对终端无效，轨道和滑块都要在这里重建。
    滑块宽度/left 是 JS 写的行内样式，颜色是 xterm 注入的 <style>，
    App.vue 里 has-bg 的通配透明规则还带 !important，所以这里也得 !important。
-   不改 .scrollbar 容器自身的 14px 宽度：FitAddon 也按 14px 预留水平空间，
-   点击轨道翻页的热区也是它，改窄会留下 6px 死区。 */
+   不改 .scrollbar 容器自身的 0.875rem 宽度：FitAddon 也按 0.875rem 预留水平空间，
+   点击轨道翻页的热区也是它，改窄会留下 0.375rem 死区。 */
 
-/* 轨道保持透明。轨道现在贴容器右缘，但顶/底仍被 .xterm 的 4px padding 挤在
+/* 轨道保持透明。轨道现在贴容器右缘，但顶/底仍被 .xterm 的 0.25rem padding 挤在
    内侧，一旦上色就会把那圈 padding 显成边线。对比度全交给滑块承担。 */
 .xterm .xterm-scrollable-element > .scrollbar.vertical {
   background: transparent !important;
@@ -338,9 +367,9 @@ body::before {
    --terminal-scrollbar-thumb 由 applyTerminalBgVar() 写在终端根元素上，
    取不到时回退到应用主题的 --scrollbar-thumb。 */
 .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
-  width: 8px !important;
-  left: 3px !important;
-  border-radius: 10px;
+  width: 0.5rem !important;
+  left: 0.1875rem !important;
+  border-radius: 0.625rem;
   background: var(--terminal-scrollbar-thumb, var(--scrollbar-thumb)) !important;
 }
 .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider:hover,
@@ -363,24 +392,24 @@ body::before {
 }
 .el-dialog__header {
   border-bottom: 1px solid var(--border-subtle);
-  padding: 6px 12px;
+  padding: 0.375rem 0.75rem;
 }
 .el-dialog__headerbtn {
-  top: 6px;
+  top: 0.375rem;
 }
 .el-dialog__title,
 .el-dialog__headerbtn .el-dialog__close {
   color: var(--text-primary) !important;
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1;
 }
 .el-dialog__body {
   color: var(--text-primary);
-  padding: 8px 12px;
+  padding: 0.5rem 0.75rem;
 }
 .el-dialog__footer {
-  padding: 6px 12px;
+  padding: 0.375rem 0.75rem;
 }
 
 /* Message box (ElMessageBox.confirm/prompt) — mirror .el-dialog so k8s
@@ -393,28 +422,28 @@ body::before {
 }
 .el-message-box__header {
   border-bottom: 1px solid var(--border-subtle);
-  padding: 10px 14px;
+  padding: 0.625rem 0.875rem;
 }
 .el-message-box__title {
   color: var(--text-primary) !important;
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .el-message-box__headerbtn .el-message-box__close {
   color: var(--text-primary) !important;
 }
 .el-message-box__content {
   color: var(--text-primary);
-  padding: 14px;
+  padding: 0.875rem;
 }
 .el-message-box__btns {
-  padding: 6px 14px 12px;
+  padding: 0.375rem 0.875rem 0.75rem;
 }
 
 .el-form-item {
   display: flex !important;
   align-items: center !important;
-  margin-bottom: 10px !important;
+  margin-bottom: 0.625rem !important;
   overflow: visible !important;
 }
 .el-form-item__label {
@@ -422,8 +451,8 @@ body::before {
   line-height: 1.3 !important;
   color: var(--text-secondary) !important;
   font-family: var(--font-ui);
-  font-size: 12px !important;
-  padding-bottom: 2px !important;
+  font-size: 0.75rem !important;
+  padding-bottom: 0.125rem !important;
   overflow: visible !important;
   white-space: normal !important;
 }
@@ -434,10 +463,10 @@ body::before {
 .el-input__inner,
 .el-textarea__inner {
   font-family: var(--font-ui);
-  font-size: 12px !important;
+  font-size: 0.75rem !important;
 }
 /* ============================================================
-   Unified control sizing — all input/button/select controls = 28px
+   Unified control sizing — all input/button/select controls = 1.75rem
    ============================================================ */
 
 /* --- input wrapper base --- */
@@ -449,11 +478,11 @@ body::before {
 }
 
 .el-button {
-  height: 28px !important;
-  padding: 4px 14px !important;
+  height: 1.75rem !important;
+  padding: 0.25rem 0.875rem !important;
   box-sizing: border-box !important;
   font-family: var(--font-ui);
-  font-size: 12px !important;
+  font-size: 0.75rem !important;
   border-radius: var(--radius-sm);
   transition: all 0.15s ease;
 }
@@ -469,16 +498,16 @@ body::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 12px;
+  gap: 0.375rem;
+  height: 1.75rem;
+  padding: 0 0.75rem;
   box-sizing: border-box;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
@@ -511,7 +540,7 @@ body::before {
 .btn-primary:hover:not(:disabled) {
   background: var(--accent);
   border-color: var(--accent);
-  box-shadow: 0 0 12px var(--accent-glow);
+  box-shadow: 0 0 0.75rem var(--accent-glow);
 }
 
 /* Ghost - no border/fill until hover; the common case for toolbar/inline actions
@@ -545,23 +574,23 @@ body::before {
   color: var(--error);
 }
 
-/* Icon-only - square, no label; pair with an 14-16px icon child */
+/* Icon-only - square, no label; pair with an 14-1rem icon child */
 .btn-icon {
-  width: 28px;
-  height: 28px;
+  width: 1.75rem;
+  height: 1.75rem;
   padding: 0;
   flex: none;
 }
 
 /* Compact sizing for dense toolbars */
 .btn-sm {
-  height: 24px;
-  padding: 0 8px;
-  font-size: 12px;
+  height: 1.5rem;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
 }
 .btn-sm.btn-icon {
-  width: 24px;
-  height: 24px;
+  width: 1.5rem;
+  height: 1.5rem;
   padding: 0;
 }
 
@@ -571,12 +600,12 @@ body::before {
 .btn-ghost.paste:hover:not(:disabled) { color: var(--accent); }
 
 .el-radio-button__inner {
-  height: 28px !important;
-  padding: 4px 12px !important;
+  height: 1.75rem !important;
+  padding: 0.25rem 0.75rem !important;
   box-sizing: border-box !important;
-  line-height: 20px !important;
+  line-height: 1.25rem !important;
   font-family: var(--font-ui);
-  font-size: 12px !important;
+  font-size: 0.75rem !important;
   border-radius: var(--radius-sm);
   transition: all 0.15s ease;
   background: var(--bg-base) !important;
@@ -585,22 +614,22 @@ body::before {
 }
 
 .el-switch {
-  height: 28px !important;
+  height: 1.75rem !important;
 }
 
 .el-checkbox {
-  height: 28px !important;
-  line-height: 28px !important;
+  height: 1.75rem !important;
+  line-height: 1.75rem !important;
 }
 
 .el-radio {
-  height: 28px !important;
-  line-height: 28px !important;
+  height: 1.75rem !important;
+  line-height: 1.75rem !important;
 }
 
 .el-tag {
-  height: 24px !important;
-  line-height: 22px !important;
+  height: 1.5rem !important;
+  line-height: 1.375rem !important;
 }
 
 /* --- input inner text & placeholder --- */
@@ -608,7 +637,7 @@ body::before {
 .el-textarea__inner {
   color: var(--text-primary) !important;
   font-family: var(--font-ui);
-  font-size: 12px !important;
+  font-size: 0.75rem !important;
 }
 
 .el-input__inner::placeholder,
@@ -617,12 +646,12 @@ body::before {
 }
 
 .el-select .el-input__inner {
-  font-size: 12px !important;
+  font-size: 0.75rem !important;
 }
 .el-select__placeholder,
 .el-select__input,
 .el-select__selected-item {
-  font-size: 12px !important;
+  font-size: 0.75rem !important;
   font-family: var(--font-ui);
 }
 
@@ -632,7 +661,7 @@ body::before {
 .el-radio__label,
 .el-form-item__label {
   font-family: var(--font-ui);
-  font-size: 12px !important;
+  font-size: 0.75rem !important;
 }
 
 /* --- input-number --- */
@@ -641,7 +670,7 @@ body::before {
 }
 .el-input-number .el-input-number__decrease,
 .el-input-number .el-input-number__increase {
-  width: 24px !important;
+  width: 1.5rem !important;
 }
 
 /* --- input focus / hover --- */
@@ -659,13 +688,13 @@ body::before {
 .el-input-number .el-input__wrapper.is-focus,
 .el-select .el-input.is-focus .el-input__wrapper,
 .el-textarea__inner:focus {
-  box-shadow: 0 0 0 1px var(--accent) inset, 0 0 0 3px var(--accent-glow) !important;
+  box-shadow: 0 0 0 1px var(--accent) inset, 0 0 0 0.1875rem var(--accent-glow) !important;
 }
 
 /* --- tags --- */
 .el-tag {
   font-family: var(--font-ui);
-  font-size: 12px !important;
+  font-size: 0.75rem !important;
 }
 
 .el-select-dropdown {
@@ -677,10 +706,10 @@ body::before {
 .el-select-dropdown__item {
   display: flex;
   align-items: center;
-  padding: 6px 12px !important;
+  padding: 0.375rem 0.75rem !important;
   color: var(--text-secondary) !important;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1;
   background: transparent !important;
   transition: none !important;
@@ -701,15 +730,15 @@ body::before {
 .el-autocomplete-suggestion__wrap,
 .el-autocomplete-suggestion__list {
   overflow: hidden;
-  font-size: 12px !important;
+  font-size: 0.75rem !important;
   background: var(--bg-surface) !important;
 }
 .el-autocomplete-suggestion__item,
 .el-autocomplete-suggestion__list .el-autocomplete-suggestion__item {
   font-family: var(--font-ui);
-  font-size: 12px !important;
+  font-size: 0.75rem !important;
   line-height: 1.4 !important;
-  padding: 6px 12px !important;
+  padding: 0.375rem 0.75rem !important;
   color: var(--text-secondary) !important;
 }
 .el-autocomplete-suggestion__item:hover,
@@ -736,8 +765,8 @@ body::before {
   background: transparent !important;
   color: var(--text-secondary) !important;
   font-family: var(--font-ui);
-  font-size: 12px;
-  padding: 4px 8px !important;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem !important;
 }
 .el-tree-select__popper .el-select-dropdown__item.hover,
 .el-tree-select__popper .el-select-dropdown__item:hover {
@@ -761,7 +790,7 @@ body::before {
 .el-tree-select__popper .el-tree-node__label {
   color: var(--text-secondary) !important;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .el-tree-select__popper .el-tree-node__expand-icon {
   color: var(--text-disabled) !important;
@@ -784,7 +813,7 @@ body::before {
 .el-button--primary:hover {
   background: var(--accent) !important;
   border-color: var(--accent) !important;
-  box-shadow: 0 0 12px var(--accent-glow);
+  box-shadow: 0 0 0.75rem var(--accent-glow);
 }
 
 .el-dropdown-menu {
@@ -796,9 +825,9 @@ body::before {
 .el-dropdown-menu__item {
   color: var(--text-secondary) !important;
   font-family: var(--font-ui);
-  font-size: 12px !important;
+  font-size: 0.75rem !important;
   line-height: 1.4 !important;
-  padding: 6px 16px !important;
+  padding: 0.375rem 1rem !important;
   background: transparent !important;
   transition: none !important;
 }
@@ -828,6 +857,11 @@ body::before {
 .el-table th.el-table__cell {
   background: var(--bg-elevated);
   color: var(--text-primary);
+}
+/* Keep header labels and sort carets on one line in narrow columns; the
+   .cell's own overflow hidden + ellipsis truncates the label instead. */
+.el-table th.el-table__cell .cell {
+  white-space: nowrap;
 }
 .el-table td.el-table__cell {
   color: var(--text-primary);
@@ -874,7 +908,7 @@ body::before {
   background: var(--bg-surface) !important;
   color: var(--text-primary) !important;
   box-shadow: var(--shadow-md) !important;
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(0.5rem);
 }
 .el-popper__arrow {
   display: none !important;
@@ -945,8 +979,8 @@ body.drag-active .zone {
   background: var(--bg-overlay);
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 11px;
-  padding: 4px 8px;
+  font-size: 0.6875rem;
+  padding: 0.25rem 0.5rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-hover);
   box-shadow: var(--shadow-md);
@@ -956,14 +990,14 @@ body.drag-active .zone {
 
 /* --- Theme select group labels --- */
 .theme-select-popper .el-select-group__title {
-  font-size: 10px;
+  font-size: 0.625rem;
   line-height: 1.2;
   color: var(--text-disabled);
   text-align: center;
-  padding: 2px 12px;
+  padding: 0.125rem 0.75rem;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .theme-select-popper .el-select-group__title::before,
 .theme-select-popper .el-select-group__title::after {
@@ -978,20 +1012,20 @@ body.drag-active .zone {
 .mode-select-popper .el-select-dropdown__item {
   height: auto;
   line-height: normal;
-  padding: 8px 12px;
+  padding: 0.5rem 0.75rem;
   white-space: normal;
 }
 .mode-select-popper .mode-option {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
 }
 .mode-select-popper .mode-option-title {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
 }
 .mode-select-popper .mode-option-desc {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
   line-height: 1.4;
   white-space: normal;
@@ -1000,37 +1034,37 @@ body.drag-active .zone {
 /* ============================================================
    Autocomplete suggestion dropdown
    Target every possible selector so the item font matches
-   the rest of the UI (12px). The popper is teleported to body
+   the rest of the UI (0.75rem). The popper is teleported to body
    so scoped styles cannot reach it.
    ============================================================ */
 /* Container */
 .el-autocomplete-suggestion,
 .el-autocomplete__popper,
 .el-popper.is-pure:has(.el-autocomplete-suggestion) {
-  font-size: 12px !important;
+  font-size: 0.75rem !important;
   background: var(--bg-surface) !important;
   border: 1px solid var(--border-subtle) !important;
   border-radius: var(--radius-md) !important;
   box-shadow: var(--shadow-md) !important;
 }
-/* Force every child to 12px */
+/* Force every child to 0.75rem */
 .el-autocomplete-suggestion *,
 .el-autocomplete-suggestion__wrap,
 .el-autocomplete-suggestion__list,
 .el-autocomplete-suggestion__item {
-  font-size: 12px !important;
+  font-size: 0.75rem !important;
 }
 /* Ensure scrollbar wrap handles mouse wheel */
 .el-autocomplete-suggestion__wrap {
   overflow: auto !important;
   overflow-y: auto !important;
-  max-height: 280px;
+  max-height: 17.5rem;
 }
 /* Specific item styling */
 .el-autocomplete-suggestion__item {
   font-family: var(--font-ui) !important;
   line-height: 1.4 !important;
-  padding: 5px 12px !important;
+  padding: 0.3125rem 0.75rem !important;
   color: var(--text-secondary) !important;
   height: auto !important;
   min-height: unset !important;
@@ -1045,5 +1079,5 @@ body.drag-active .zone {
 }
 /* Cover the case where autocomplete reuses select-dropdown */
 .el-autocomplete-suggestion .el-select-dropdown__item {
-  font-size: 12px !important;
+  font-size: 0.75rem !important;
 }

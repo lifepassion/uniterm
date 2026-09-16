@@ -5,7 +5,7 @@
        `shortcut` renders a muted trailing hint (keyboard shortcut / aux text);
        the `#trailing` slot hosts right-aligned content that fades in on row
        hover (e.g. a delete button) without the host hand-rolling the reveal. -->
-  <div class="menu-item" :class="{ 'has-trailing': !!$slots.trailing, iconic }">
+  <div class="menu-item" :class="{ 'has-trailing': !!$slots.trailing, 'has-shortcut': !!shortcut, iconic }">
     <component
       v-if="icon"
       :is="icon"
@@ -32,7 +32,7 @@ defineProps<{
   /** Icon + label (and a trailing slot) laid out on one flex line. */
   iconic?: boolean
   /** Optional muted trailing hint (usually a keyboard shortcut). Shown only
-   *  when non-empty and right-aligned by the container's .right-shortcuts. */
+   *  when non-empty; always right-aligned (.has-shortcut below). */
   shortcut?: string
 }>()
 </script>
@@ -42,10 +42,23 @@ defineProps<{
   flex-shrink: 0;
   color: inherit;
 }
+/* Rows with a shortcut hint turn flex so the hint ("Ctrl+C" etc.) hugs the
+   right edge instead of sitting after the label. Rows without one keep the
+   plain block layout (the class is absent, so this no-ops). */
+.menu-item.has-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
 .menu-shortcut {
   flex-shrink: 0;
-  font-size: 11px;
-  font-family: var(--font-mono);
+  margin-left: auto;
+  font-size: 0.6875rem;
+  /* UI font, not mono: on macOS the ⌘⌥⇧ glyphs only get their square,
+     native-looking shapes from the system font (SF Pro); mono falls back to
+     Menlo and renders them thin and text-like. Windows native menus also use
+     the UI font for shortcut hints. */
+  font-family: var(--font-ui);
   color: var(--text-muted, var(--text-disabled));
   opacity: 0.8;
 }
@@ -64,14 +77,14 @@ defineProps<{
      revealed block reads as the button itself, not a bar spanning the row. */
   position: absolute;
   top: 50%;
-  right: 10px;
+  right: 0.625rem;
   transform: translateY(-50%);
   display: flex;
   align-items: center;
   /* Uniform padding hugs the button content into a square; --bg-hover matches
      the hovered row so the block looks like a natural highlight, and being an
      opaque solid it occludes the row text passing beneath. */
-  padding: 2px;
+  padding: 0.125rem;
   background: var(--bg-hover);
   border-radius: var(--radius-sm);
   opacity: 0;

@@ -24,24 +24,19 @@ const FormatDBeaver = "dbeaver"
 // decrypted block discarded — the file's real IV is recovered that way).
 var dbeaverAesKey, _ = hex.DecodeString("babb4a9f774ab853c96c2d653dfe544a")
 
-// dbeaverDBType maps DBeaver providers onto uniterm dbType keys.
-var dbeaverDBType = map[string]string{
-	"mysql":         "mysql",
-	"mariadb":       "mysql",
-	"postgresql":    "postgres",
-	"postgres":      "postgres",
-	"mssql":         "sqlserver",
-	"sqlserver":     "sqlserver",
-	"oracle":        "oracle",
-	"redis":         "redis",
-	"mongodb":       "mongodb",
-	"elasticsearch": "elasticsearch",
-}
-
-// dbeaverDefaultPort per uniterm dbType, used when the source omits port.
-var dbeaverDefaultPort = map[string]int{
-	"mysql": 3306, "postgres": 5432, "sqlserver": 1433, "oracle": 1521,
-	"mongodb": 27017, "redis": 6379, "elasticsearch": 9200,
+// dbeaverConnType maps DBeaver providers directly onto uniterm database
+// targets (config type + dbType + default port).
+var dbeaverConnType = map[string]connTarget{
+	"mysql":         {Type: "database", DBType: "mysql", Port: 3306},
+	"mariadb":       {Type: "database", DBType: "mysql", Port: 3306},
+	"postgresql":    {Type: "database", DBType: "postgres", Port: 5432},
+	"postgres":      {Type: "database", DBType: "postgres", Port: 5432},
+	"mssql":         {Type: "database", DBType: "sqlserver", Port: 1433},
+	"sqlserver":     {Type: "database", DBType: "sqlserver", Port: 1433},
+	"oracle":        {Type: "database", DBType: "oracle", Port: 1521},
+	"redis":         {Type: "redis", Port: 6379},
+	"mongodb":       {Type: "mongodb", Port: 27017},
+	"elasticsearch": {Type: "elasticsearch", Port: 9200},
 }
 
 // dbeaverSource is one entry of data-sources.json's connections map.
@@ -100,7 +95,7 @@ func parseDBeaver(srcPath string, opts ParseOptions) (*ImportResult, error) {
 	newConn := newConnectionID
 
 	for id, src := range doc.Connections {
-		dbType, ok := dbeaverDBType[strings.ToLower(strings.TrimSpace(src.Provider))]
+		tgt, ok := dbeaverConnType[strings.ToLower(strings.TrimSpace(src.Provider))]
 		if !ok {
 			res.Warnings = append(res.Warnings, fmt.Sprintf("%s: unsupported provider %q, skipped", src.Name, src.Provider))
 			continue
@@ -108,14 +103,14 @@ func parseDBeaver(srcPath string, opts ParseOptions) (*ImportResult, error) {
 		conn := session.ConnectionConfig{
 			ID:       newConn(),
 			Name:     firstNonEmpty(src.Name, id),
-			Type:     "database",
+			Type:     tgt.Type,
+			DBType:   tgt.DBType,
 			Host:     src.Configuration.Host,
-			DBType:   dbType,
 			DBName:   src.Configuration.Database,
 			User:     src.Configuration.User,
 			AuthType: "password",
 		}
-		conn.Port = dbeaverPortOf(src.Configuration.Port, dbType)
+		conn.Port = dbeaverPortOf(src.Configuration.Port, tgt.Port)
 		if creds != nil {
 			if c, ok := creds[id]; ok {
 				if conn.User == "" {
@@ -227,7 +222,7 @@ func dbeaverDecrypt(data []byte) ([]byte, error) {
 
 // dbeaverPortOf parses DBeaver's port (string or number) with a per-dbType
 // default fallback.
-func dbeaverPortOf(raw json.RawMessage, dbType string) int {
+func dbeaverPortOf(raw json.RawMessage, fallback int) int {
 	var n int
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &n); err == nil && n > 0 {
@@ -240,7 +235,7 @@ func dbeaverPortOf(raw json.RawMessage, dbType string) int {
 			}
 		}
 	}
-	return dbeaverDefaultPort[dbType]
+	return fallback
 }
 
 func firstNonEmpty(vals ...string) string {

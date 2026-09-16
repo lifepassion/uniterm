@@ -3,9 +3,9 @@
     :model-value="visible"
     @update:model-value="(v: boolean) => !v && onCancel()"
     :title="t('importExport.importTitle')"
-    width="460px"
+    width="28.75rem"
   >
-    <el-form label-width="100px">
+    <el-form label-width="6.25rem">
       <el-form-item :label="t('importExport.importType')">
         <el-select v-model="format" style="width:100%">
           <el-option label="uniTerm (.utm)" value="uniterm" />
@@ -19,13 +19,13 @@
         </el-select>
       </el-form-item>
       <el-form-item v-if="format !== 'openssh' && format !== 'dbeaver'" :label="t('importExport.file')">
-        <div style="display:flex;gap:8px;width:100%">
+        <div style="display:flex;gap:0.5rem;width:100%">
           <el-input v-model="srcPath" readonly :placeholder="t('importExport.chooseFile')" style="flex:1" />
           <el-button @click="pickFile">{{ t('importExport.chooseFile') }}</el-button>
         </div>
       </el-form-item>
       <el-form-item v-if="format === 'dbeaver'" :label="t('importExport.file')">
-        <div style="display:flex;gap:8px;width:100%">
+        <div style="display:flex;gap:0.5rem;width:100%">
           <el-input v-model="srcPath" readonly :placeholder="t('importExport.dbeaverPathHint')" style="flex:1" />
           <el-button @click="pickDBeaverDir">{{ t('importExport.chooseFile') }}</el-button>
         </div>

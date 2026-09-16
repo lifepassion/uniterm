@@ -36,18 +36,18 @@
       />
       <span class="search-count" v-if="searchText">{{ searchResultIndex + 1 }}/{{ searchResultCount || 0 }}</span>
       <button class="search-btn" @click="onSearchPrev" :title="t('terminal.searchPrev')">
-        <ChevronUp :size="14" />
+        <ChevronUp :size="'0.875rem'" />
       </button>
       <button class="search-btn" @click="onSearchNext" :title="t('terminal.searchNext')">
-        <ChevronDown :size="14" />
+        <ChevronDown :size="'0.875rem'" />
       </button>
       <button class="search-btn" @click="closeSearch" :title="t('terminal.searchClose')">
-        <X :size="14" />
+        <X :size="'0.875rem'" />
       </button>
     </div>
 
     <!-- Terminal context menu -->
-    <Menu ref="terminalMenuRef" v-model:visible="terminalMenuVisible" root-class="right-shortcuts">
+    <Menu ref="terminalMenuRef" v-model:visible="terminalMenuVisible">
       <!-- ① 剪贴板 -->
       <MenuItem :class="{ disabled: !menu.hasSelection.value }" :shortcut="menuShortcut('copy')" @click="menu.copySelection">
         {{ t('terminal.copy') }}
@@ -89,7 +89,7 @@
     </Menu>
 
     <!-- Gutter context menu — right-click on the line-number/time columns -->
-    <Menu ref="gutterMenuRef" v-model:visible="gutterMenuVisible" root-class="right-shortcuts">
+    <Menu ref="gutterMenuRef" v-model:visible="gutterMenuVisible">
       <MenuItem :shortcut="menuShortcut('toggleLineNumbers')" @click="toggleLineNumbers">
         {{ showLineNumbers ? t('settings.hideLineNumbers') : t('settings.showLineNumbers') }}
       </MenuItem>
@@ -123,7 +123,8 @@ import { ref, computed, onMounted, onBeforeUnmount, onUnmounted, onActivated, on
 import type { Terminal } from '@xterm/xterm'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
-import { SessionWrite, SessionResize, SessionEndZmodem } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { SessionResize, SessionEndZmodem } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { queuedSessionWrite } from '../services/sessionWriter'
 import { WriteFileBase64, SaveFileDialog, FrontendLog, EnableSessionOutputLog, DisableSessionOutputLog, GetSessionOutputLogInfo, OpenPathInExplorer } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useNativeFileDrop } from '../composables/useFilePanel'
 import { connectFileMenuKey } from '../utils/fileTransferUtils'
@@ -138,6 +139,7 @@ import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useTerminalMenu } from '../composables/useTerminalMenu'
 import { writeClipboard } from '../composables/useClipboardWrite'
+import { filterTerminalInput } from '../utils/terminalInputFilter'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
 import MenuDivider from './MenuDivider.vue'
@@ -162,7 +164,7 @@ import {
   sanitizeLiveTerminalOutput,
 } from '../utils/terminalSanitize'
 import { useTerminalInput } from '../composables/useTerminalInput'
-import { useSuggestions, quickCommandCache } from '../composables/useSuggestions'
+import { useSuggestions } from '../composables/useSuggestions'
 import TerminalSuggestion from './TerminalSuggestion.vue'
 import TerminalGutter from './TerminalGutter.vue'
 import { startZmodemService } from '../services/zmodemService'
@@ -288,6 +290,38 @@ let onExport: ((e: Event) => void) | null = null
 let onSendRz: ((e: Event) => void) | null = null
 let onTerminalCopy: ((e: Event) => void) | null = null
 let onTerminalPaste: ((e: Event) => void) | null = null
+let onVisibilityChange: (() => void) | null = null
+
+// Reset xterm's internal IME composition state. Two variants:
+// - resetIMEState:        only clears internal flags (safe during active typing)
+// - resetIMEComposition:  also blurs textarea to end OS-level composition (for
+//                         deactivation / visibility change when terminal is hidden)
+//
+// Accessing _core._compositionHelper is fragile but necessary — xterm exposes
+// no public API for this. The guard ensures we only act when composition is
+// actually active.
+function resetIMEState(): boolean {
+  if (!terminal) return false
+  const core = (terminal as any)._core
+  const ch = core?._compositionHelper
+  if (!ch) return false
+  if (!ch._isComposing && !ch._isSendingComposition) return false
+  ch._isSendingComposition = false
+  ch._isComposing = false
+  ch._dataAlreadySent = ''
+  const cv = core?._helperContainer?.querySelector?.('.composition-view')
+  if (cv) cv.classList.remove('active')
+  return true
+}
+
+function resetIMEComposition() {
+  if (!resetIMEState()) return
+  // Clear the textarea and end the OS-level composition via blur.
+  if (terminal.textarea) {
+    terminal.textarea.value = ''
+    terminal.textarea.blur()
+  }
+}
 
 let resizeTimer: ReturnType<typeof setTimeout> | null = null
 // Trailing resize for size changes observed while a resize gate (window
@@ -304,7 +338,33 @@ let isZmodemStarting = false
 let zmodemStartTimer: ReturnType<typeof setTimeout> | null = null
 let zmodemDirection: 'upload' | 'download' | undefined = undefined
 let zmodemCancellingUntil = 0
+let zmodemRestoringOutput = false
+let zmodemCompletionPending = false
+const zmodemDeferredOutput: string[] = []
 let exporting = false
+
+function renderTerminalData(rawData: string, countChunk = true) {
+  if (!terminal) return
+  let data = stripCursorBlink(rawData, settingsStore.settings.terminal.cursorBlink ?? true).replace(/\x1b\[3J/g, '')
+  if (data.includes('\x1b[2J') && terminal.buffer.active.type !== 'alternate') {
+    const scrollClear = '\n'.repeat(terminal.rows) + '\x1b[H'
+    data = data.replace(/\x1b\[H\x1b\[2J/g, scrollClear)
+    data = data.replace(/\x1b\[2J/g, scrollClear)
+  }
+  data = sanitizeLiveTerminalOutput(data)
+  if (props.mode === 'sftp') {
+    const cleaned = data.replace(/\x1b\]633;S[^\x07]*\x07/g, '')
+    if (cleaned) writeStamped(cleaned)
+  } else {
+    if (props.mode === 'ssh' && terminalInput) {
+      terminalInput.handleSessionData(data)
+      if (terminalInput.isInAlternateScreen()) suggestions.close()
+    }
+    const hlOn = (settingsStore.settings.terminal.highlightEnabled ?? true) && props.mode !== 'local'
+    writeStamped(hlOn ? highlight(data) : data)
+  }
+  if (countChunk) writtenChunks++
+}
 
 function initZmodemService(sessionId: string) {
   if (!sessionId || props.mode !== 'ssh') return
@@ -315,8 +375,24 @@ function initZmodemService(sessionId: string) {
   zmodemService = startZmodemService({
     // Register abort so any BaseTerminal component can cancel the transfer
     onRegister: (abort) => zmodemStore.registerAbort(sessionId, abort),
+    onUnregister: () => zmodemStore.unregisterAbort(sessionId),
     sessionId,
     direction: zmodemDirection,
+    getDefaultDownloadDir: () => settingsStore.settings.terminal.zmodemDownloadDir,
+    onTerminalRestoreState: restoring => {
+      zmodemRestoringOutput = restoring
+      if (!restoring) {
+        for (const data of zmodemDeferredOutput.splice(0)) renderTerminalData(data)
+        if (zmodemCompletionPending) {
+          zmodemCompletionPending = false
+          void disposeZmodemService(sessionId, true, false)
+          initZmodemService(sessionId)
+        }
+      }
+    },
+    onWarning: warning => {
+      terminal?.write(`\r\n\x1b[33mZmodem: ${warning}\x1b[0m\r\n`)
+    },
     onComplete: (files, hint) => {
       if (files.length > 0) {
         terminal?.write(`\r\n\x1b[32mZmodem: ${files.length} file(s) transferred\x1b[0m\r\n`)
@@ -331,28 +407,37 @@ function initZmodemService(sessionId: string) {
         const cancelUntil = Math.max(zmodemCancellingUntil, zmodemStore.getCancelUntil(sessionId))
         const remaining = Math.max(0, cancelUntil - Date.now())
         setTimeout(() => {
-          SessionWrite(sessionId, '\n').catch(() => {})
+          queuedSessionWrite(sessionId, '\n')
         }, remaining + 100)
       }
       zmodemStore.clearTransfers(sessionId)
       zmodemDirection = undefined
-      disposeZmodemService(sessionId)
-      initZmodemService(sessionId)
+      if (zmodemRestoringOutput) {
+        // Keep the binary listener alive until finishTransfer has drained any
+        // prompt event queued concurrently with the backend mode handoff.
+        zmodemCompletionPending = true
+      } else {
+        void disposeZmodemService(sessionId, true, false)
+        initZmodemService(sessionId)
+      }
     },
     onError: (err) => {
+      zmodemCompletionPending = false
       terminal?.write(`\r\n\x1b[31mZmodem error: ${err}\x1b[0m\r\n`)
       zmodemStore.clearTransfers(sessionId)
       zmodemDirection = undefined
-      disposeZmodemService(sessionId)
+      void disposeZmodemService(sessionId, true, false)
       initZmodemService(sessionId)
     },
   })
 }
 
 async function disposeZmodemService(sessionId: string, resetDirection = true, endSession = true) {
-  zmodemService?.dispose()
+  const service = zmodemService
+  const serviceDisposed = service?.dispose()
   zmodemService = null
   isZmodemStarting = false
+  zmodemCompletionPending = false
   if (resetDirection) {
     zmodemDirection = undefined
   }
@@ -360,9 +445,12 @@ async function disposeZmodemService(sessionId: string, resetDirection = true, en
     clearTimeout(zmodemStartTimer)
     zmodemStartTimer = null
   }
-  if (sessionId && endSession) {
+  // A service that started binary mode also ends it, ordered after its pending
+  // start. Only use the direct fallback when no service owns that lifecycle.
+  if (!service && sessionId && endSession) {
     await SessionEndZmodem(sessionId).catch(() => {})
   }
+  await serviceDisposed
 }
 
 // OS file drops (resource manager) are delivered by Wails via the native
@@ -443,13 +531,13 @@ function onNativePathsDropped(paths: string[]) {
     const panel = panelStore.getPanel(props.panelId || '')
     const shellPath = panel?.config?.shellPath
     const text = paths.map(p => toShellPath(p, shellPath)).join(' ')
-    SessionWrite(props.sessionId, text)
+    queuedSessionWrite(props.sessionId, text)
     return
   }
 
   // Remote terminal: trigger zmodem upload
   zmodemStore.setPendingUploadFiles(props.sessionId, paths)
-  SessionWrite(props.sessionId, 'rz -be\n')
+  queuedSessionWrite(props.sessionId, 'rz -be\n')
 }
 
 function onZmodemCancel() {
@@ -523,13 +611,13 @@ async function applySuggestion(item: ReturnType<typeof suggestions.getSelectedIt
       for (const pid of targets) {
         const p = panelStore.getPanel(pid)
         if (p?.sessionId && (p.type === 'ssh' || p.type === 'local' || p.type === 'wsl')) {
-          SessionWrite(p.sessionId, '\x15')
-          SessionWrite(p.sessionId, item.value)
+          queuedSessionWrite(p.sessionId, '\x15')
+          queuedSessionWrite(p.sessionId, item.value)
         }
       }
     } else if (sid) {
-      SessionWrite(sid, '\x15')
-      SessionWrite(sid, item.value)
+      queuedSessionWrite(sid, '\x15')
+      queuedSessionWrite(sid, item.value)
     }
     terminalInput.lineBuffer.value = item.value
     terminalInput.cursorIndex.value = item.value.length
@@ -718,29 +806,6 @@ function onSplitResizeEnd() {
   })
 }
 
-// Strip OSC sequences that xterm.js generates internally (color queries etc.)
-// and CSI *responses* it auto-generates when the remote app queries the
-// terminal (CPR cursor-position, DSR status, DA device-attributes, cell/window
-// size). These are xterm.js talking back to a query — echoing them to the
-// remote as if they were user input corrupts the app: a stray `ESC[2;2R`
-// arriving mid-render makes some remote vims exit, closing the channel (issue
-// #242). This must happen in the alternate screen too — vim/less/tmux are
-// exactly the apps that emit `ESC[6n` and friends. Focus in/out (I/O) is left
-// intact in the alternate screen because full-screen apps legitimately want
-// FocusGained/FocusLost.
-function filterTerminalInput(input: string, inAlternateScreen: boolean): string {
-  // OSC sequences: ESC ] ... BEL or ESC ] ... ESC \
-  let filtered = input.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
-  // Terminal query responses — strip in both normal and alternate screens.
-  filtered = filtered.replace(/\x1b\[(?:[?>][\d;]*|[\d;]*)([Rntc])/g, '')
-  if (inAlternateScreen) {
-    return filtered
-  }
-  // Normal screen only: also strip focus in/out, which a shell doesn't want.
-  filtered = filtered.replace(/\x1b\[(?:[?>][\d;]*|[\d;]*)([IO])/g, '')
-  return filtered
-}
-
 function writeTerminalInput(data: string, inAlternateScreen: boolean) {
   const sid = props.sessionId
   const filtered = filterTerminalInput(data, inAlternateScreen)
@@ -758,7 +823,7 @@ function writeTerminalInput(data: string, inAlternateScreen: boolean) {
             p.config?.backspaceKey,
             p.config?.type,
           )
-          SessionWrite(p.sessionId, translated)
+          queuedSessionWrite(p.sessionId, translated)
         }
       }
       return
@@ -771,34 +836,12 @@ function writeTerminalInput(data: string, inAlternateScreen: boolean) {
     panel?.config?.backspaceKey,
     panel?.config?.type,
   )
-  SessionWrite(sid, translated)
+  queuedSessionWrite(sid, translated)
 }
 
 function handleTerminalKey(e: KeyboardEvent): boolean {
   // Check global shortcuts first (Ctrl+Shift+/Alt+ combos)
   if (e.type === 'keydown' && !onTerminalKey(e)) return false
-
-  // macOS 26/27 beta: the first letter typed right after toggling Caps Lock
-  // arrives with keyCode 229 (the IME "composing" code) despite no real
-  // composition, so xterm's CompositionHelper swallows it and it only appears
-  // on the next keystroke (upstream xtermjs/xterm.js#5887, issue #483). keyCode
-  // 229 never fires for an ordinary letter key, and we further require Caps Lock
-  // on + an uppercase A–Z so lowercase IME composition (pinyin's first key) is
-  // untouched — re-inject the char through the normal onData pipeline ourselves.
-  if (
-    isMac &&
-    e.type === 'keydown' &&
-    e.keyCode === 229 &&
-    !e.isComposing &&
-    e.getModifierState('CapsLock') &&
-    /^[A-Z]$/.test(e.key) &&
-    !e.ctrlKey && !e.metaKey && !e.altKey &&
-    (props.mode === 'ssh' || props.mode === 'local')
-  ) {
-    e.preventDefault()
-    terminal?.input(e.key)
-    return false
-  }
 
   // A bare modifier key (Shift/Ctrl/Alt/Meta held alone) produces no input, yet
   // xterm's _keyDown still runs and, with scrollOnUserInput=true, fires
@@ -854,10 +897,10 @@ function handleTerminalKey(e: KeyboardEvent): boolean {
       e.preventDefault()
       if (e.metaKey) {
         // Cmd+Left → beginning of line
-        SessionWrite(props.sessionId || '', '\x1b[H')
+        queuedSessionWrite(props.sessionId || '', '\x1b[H')
       } else if (e.altKey) {
         // Option+Left → backward word
-        SessionWrite(props.sessionId || '', '\x1bb')
+        queuedSessionWrite(props.sessionId || '', '\x1bb')
       }
       return false
     }
@@ -865,10 +908,10 @@ function handleTerminalKey(e: KeyboardEvent): boolean {
       e.preventDefault()
       if (e.metaKey) {
         // Cmd+Right → end of line
-        SessionWrite(props.sessionId || '', '\x1b[F')
+        queuedSessionWrite(props.sessionId || '', '\x1b[F')
       } else if (e.altKey) {
         // Option+Right → forward word
-        SessionWrite(props.sessionId || '', '\x1bf')
+        queuedSessionWrite(props.sessionId || '', '\x1bf')
       }
       return false
     }
@@ -972,7 +1015,6 @@ onMounted(() => {
 
   // Initialize terminal input handling for SSH
   if (props.mode === 'ssh') {
-    const smartOn = settingsStore.settings.terminal.smartCompletion ?? true
     terminalInput = useTerminalInput(terminal, {
       mode: props.mode,
       sessionId: props.sessionId,
@@ -1013,11 +1055,6 @@ onMounted(() => {
     // may hold stale dimensions from the previous container.
     ;[50, 150, 300, 600, 1000, 2000].forEach(d => setTimeout(() => {
       if (!terminal) return
-      const el = terminalRef.value
-      const inDOM = el ? document.contains(el) : false
-      const hasXterm = el?.querySelector('.xterm') ? true : false
-      const kids = el?.children.length ?? 0
-      const rect = el?.getBoundingClientRect()
       getFitAddon()?.fit()
       const sessionId = props.sessionId
       if (sessionId && terminal.cols > 0 && terminal.rows > 0) {
@@ -1161,7 +1198,7 @@ onMounted(() => {
               for (let j = 0; j < inputBuffer.length; j++) {
                 terminal!.write('\b \b')
               }
-              SessionWrite(sid, inputBuffer)
+              queuedSessionWrite(sid, inputBuffer)
             }
             inputBuffer = ''
           }
@@ -1266,6 +1303,12 @@ onMounted(() => {
       return
     }
 
+    // Keep output arriving after EndZmodem behind the restored prompt.
+    if (zmodemRestoringOutput) {
+      zmodemDeferredOutput.push(payload.data)
+      return
+    }
+
     // tab 切换后服务还没重建，但 store 里还有活跃传输（旧的 handleReceive 还在跑），先吞数据
     const hasStoreTransfer = zmodemStore.getActiveTransfer(props.sessionId || '')
     if (!zmodemService && hasStoreTransfer) {
@@ -1301,10 +1344,7 @@ onMounted(() => {
         const sid = props.sessionId
         if (sid) {
           // Consume immediately to avoid losing data during async handoff
-          zmodemService.consume(payload.data)
-          import('../../bindings/github.com/ys-ll/uniterm/app').then(({ SessionStartZmodem }) => {
-            SessionStartZmodem(sid).catch(() => {})
-          })
+          zmodemService.start(payload.data)
         }
         // Hide zmodem data from terminal
         return
@@ -1317,43 +1357,7 @@ onMounted(() => {
       return
     }
 
-    // Filter ED3 (erase scrollback).
-    let data = stripCursorBlink(payload.data, settingsStore.settings.terminal.cursorBlink ?? true).replace(/\x1b\[3J/g, '')
-    // For ED2 (clear screen) in the main buffer, replace with scrolling
-    // to preserve scrollback history. In alternate screen (vim, less,
-    // k9s), pass through unchanged — the app manages its own screen.
-    if (data.includes('\x1b[2J') && terminal.buffer.active.type !== 'alternate') {
-      const rows = terminal.rows
-      const scrollClear = '\n'.repeat(rows) + '\x1b[H'
-      data = data.replace(/\x1b\[H\x1b\[2J/g, scrollClear)
-      data = data.replace(/\x1b\[2J/g, scrollClear)
-    }
-// Drop U+FFFD + binary garbage. See utils/terminalSanitize for the
-    // full filter chain (box-drawing / braille preservation, control-char
-    // stripping, etc.). Live path skips the blank-line collapse step.
-    data = sanitizeLiveTerminalOutput(data)
-    if (props.mode === 'sftp') {
-      const cleaned = data.replace(/\x1b\]633;S[^\x07]*\x07/g, '')
-      if (cleaned) {
-        writeStamped(cleaned)
-      }
-      writtenChunks++
-    } else {
-      // Extract history commands from SSH output
-      if (props.mode === 'ssh' && terminalInput) {
-        terminalInput.handleSessionData(data)
-        // Close suggestions if we entered an alternate screen app (vim, k9s, etc.)
-        if (terminalInput.isInAlternateScreen()) {
-          suggestions.close()
-        }
-      }
-      const hlOn = (settingsStore.settings.terminal.highlightEnabled ?? true) && props.mode !== 'local'
-      writeStamped(hlOn ? highlight(data) : data)
-      writtenChunks++
-      if (props.mode === 'ssh' && props.onSessionStatus) {
-        // onSessionData is handled by the consumer via EventsOn if needed
-      }
-    }
+    renderTerminalData(payload.data)
   })
 
   // SSH/Local: session status events
@@ -1437,7 +1441,7 @@ onMounted(() => {
     const detail = (e as CustomEvent).detail
     if (detail?.panelId && detail.panelId !== props.panelId) return
     if (props.sessionId) {
-      SessionWrite(props.sessionId, 'rz -be\n')
+      queuedSessionWrite(props.sessionId, 'rz -be\n')
     }
   }
   window.addEventListener('terminal:send-rz', onSendRz)
@@ -1468,6 +1472,17 @@ onMounted(() => {
   window.addEventListener('terminal:paste', onTerminalPaste)
 
   bindListeners()
+
+  // When the browser tab/page becomes hidden (user switches to another app
+  // or another browser tab), reset IME composition state. This prevents the
+  // OS IME from continuing to feed characters into the hidden textarea,
+  // which causes input duplication when the user returns.
+  onVisibilityChange = () => {
+    if (document.hidden && isActive.value) {
+      resetIMEComposition()
+    }
+  }
+  document.addEventListener('visibilitychange', onVisibilityChange)
 
   resizeObserver = new ResizeObserver(() => {
     // A size change landing inside a resize gate must not be dropped: if it
@@ -1579,6 +1594,11 @@ onDeactivated(() => {
   // Mark inactive so session event handlers become no-ops.
   nativeDrop.unbind()
   isActive.value = false
+  // Reset IME composition state so the OS IME doesn't continue feeding
+  // characters into the textarea while the terminal is hidden. Without
+  // this, the stale composition state causes input duplication when the
+  // user switches back (issue: IME offscreen duplicate input).
+  resetIMEComposition()
   // Capture viewport position before listeners are torn down so reactivation
   // can restore the user's scroll position. Reading from the public IBuffer
   // API avoids depending on internal _core field shape.
@@ -1632,7 +1652,6 @@ watch(() => props.sessionId, (newId, oldId) => {
     // cursor position tracking returns {0,0}, pinning the suggestion
     // popup to the top-left corner.
     if (props.mode === 'ssh') {
-      const smartOn = settingsStore.settings.terminal.smartCompletion ?? true
       terminalInput = useTerminalInput(terminal, {
         mode: props.mode,
         sessionId: newId,
@@ -1811,6 +1830,8 @@ onUnmounted(() => {
   if (onSendRz) window.removeEventListener('terminal:send-rz', onSendRz)
   if (onTerminalCopy) window.removeEventListener('terminal:copy', onTerminalCopy)
   if (onTerminalPaste) window.removeEventListener('terminal:paste', onTerminalPaste)
+  if (onVisibilityChange) document.removeEventListener('visibilitychange', onVisibilityChange)
+  onVisibilityChange = null
   suggestions.close()
   if (!zmodemStore.getActiveTransfer(props.sessionId || '')) {
     disposeZmodemService(props.sessionId || '')
@@ -1851,7 +1872,7 @@ async function pasteToSession(text: string) {
             pasteWithScroll(
               {
                 bracketedPasteMode: managed.terminal.modes.bracketedPasteMode,
-                write: (payload) => SessionWrite(p.sessionId, payload),
+                write: (payload) => queuedSessionWrite(p.sessionId, payload),
                 scrollToBottom: () => managed.terminal.scrollToBottom(),
               },
               normalized,
@@ -1868,7 +1889,7 @@ async function pasteToSession(text: string) {
       pasteWithScroll(
         {
           bracketedPasteMode: managed?.terminal.modes.bracketedPasteMode ?? false,
-          write: (payload) => SessionWrite(sid, payload),
+          write: (payload) => queuedSessionWrite(sid, payload),
           scrollToBottom: () => terminal?.scrollToBottom(),
         },
         normalized,
@@ -2064,45 +2085,47 @@ defineExpose({
 /* Search bar */
 .terminal-search-bar {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 0.5rem;
+  right: 0.5rem;
   display: flex;
   align-items: center;
-  gap: 4px;
-  background: rgba(20, 23, 29, 0.88);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  gap: 0.25rem;
+  /* 跟应用主题走（与 Zmodem 面板、终端建议弹窗等悬浮控件一致）；
+     保留 88% 不透明度，让 blur 透出一点终端内容。 */
+  background: color-mix(in srgb, var(--bg-surface) 88%, transparent);
+  backdrop-filter: blur(0.5rem);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 4px 6px;
+  padding: 0.25rem 0.375rem;
   z-index: 50;
 }
 .search-input {
-  width: 160px;
+  width: 10rem;
   background: transparent;
   border: none;
   outline: none;
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 12px;
-  padding: 2px 4px;
+  font-size: 0.75rem;
+  padding: 0.125rem 0.25rem;
 }
 .search-input::placeholder {
   color: var(--text-muted);
 }
 .search-count {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   white-space: nowrap;
-  min-width: 32px;
+  min-width: 2rem;
   text-align: center;
 }
 .search-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 1.375rem;
+  height: 1.375rem;
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
@@ -2111,7 +2134,7 @@ defineExpose({
   transition: all 0.15s;
 }
 .search-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 .terminal-area :deep(.xterm) {
@@ -2119,11 +2142,11 @@ defineExpose({
   height: 100%;
   display: block;
   box-sizing: border-box;
-  /* 右侧不留：那 14px 的滚动条轨道本身已把文本挡开（文本右缘与轨道间还有 2px），
+  /* 右侧不留：那 0.875rem 的滚动条轨道本身已把文本挡开（文本右缘与轨道间还有 0.125rem），
      右 padding 只会把整条滚动条往左推、在轨道外侧留一条空白。 */
-  padding: 4px 0 4px 4px;
+  padding: 0.25rem 0 0.25rem 0.25rem;
 }
-/* 4px padding 那圈用终端背景色，而不是应用主题色（--bg-base）。
+/* 0.25rem padding 那圈用终端背景色，而不是应用主题色（--bg-base）。
    v5 时 xterm 把终端色内联在 .xterm-viewport 上，而它 absolute inset:0
    盖满 padding box，边缘因此自带终端色；v6 改成内联到 .xterm-scrollable-element，
    该元素止于 padding 内侧，边缘便露出 .xterm 自身的应用主题色 ——
@@ -2151,10 +2174,10 @@ defineExpose({
   pointer-events: none;
 }
 .drop-overlay span {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-primary);
-  padding: 12px 24px;
-  border: 2px dashed var(--border-hover);
+  padding: 0.75rem 1.5rem;
+  border: 0.125rem dashed var(--border-hover);
   border-radius: var(--radius-md);
 }
 </style>

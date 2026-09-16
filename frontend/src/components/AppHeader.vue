@@ -4,12 +4,19 @@
     :class="`platform-${platform}`"
     @dblclick="onDblClick"
   >
-    <!-- macOS: spacer for native traffic lights -->
-    <div v-if="platform === 'darwin' && !localStateStore.state.systemTitleBar" class="mac-traffic-light-spacer" />
+    <!-- macOS: custom traffic lights (Wails frameless hides the native ones) -->
+    <WindowControls
+      v-if="showWindowControls && platform === 'darwin'"
+      variant="mac"
+      :is-maximised="isMaximised"
+      @minimise="onMinimise"
+      @maximise="onMaximise"
+      @close="onClose"
+    />
 
     <!-- Connections button (icon only, leftmost) -->
     <button class="header-btn" @click="emit('toggle-sidebar')" :title="t('header.connections') + shortcutSuffix('toggleSidebar')">
-      <el-icon><PanelLeft :size="14" /></el-icon>
+      <el-icon><PanelLeft :size="'0.875rem'" /></el-icon>
     </button>
 
 
@@ -25,13 +32,13 @@
 
     <!-- AI button -->
     <button class="header-btn" @click="emit('toggle-ai')" :title="t('header.ai') + shortcutSuffix('focusAI')">
-      <el-icon><Bot :size="14" /></el-icon>
+      <el-icon><Bot :size="'0.875rem'" /></el-icon>
     </button>
 
     <!-- Settings button opens a dropdown menu with common settings items -->
     <div class="settings-wrap">
-      <button ref="settingsBtnRef" class="header-btn" @click.stop="toggleSettingsMenu" :title="t('header.menu') + shortcutSuffix('openSettings')">
-        <el-icon><MenuIcon :size="14" /></el-icon>
+      <button ref="settingsBtnRef" class="header-btn" @click.stop="toggleSettingsMenu" :title="t('header.menu')">
+        <el-icon><MenuIcon :size="'0.875rem'" /></el-icon>
       </button>
 
       <!-- Settings dropdown (theme / language / ai / identities / proxies / settings / check update) -->
@@ -77,7 +84,7 @@
         <MenuDivider />
 
         <!-- 设置 / 关于 / 检查更新 -->
-        <MenuItem @click="openCategory('basic')">{{ t('settings.title') }}</MenuItem>
+        <MenuItem :shortcut="menuShortcut('openSettings')" @click="openCategory('basic')">{{ t('settings.title') }}</MenuItem>
         <MenuItem @click="openCategory('about')">{{ t('settings.about') }}</MenuItem>
         <MenuItem @click="checkUpdate">{{ t('settings.checkUpdate') }}</MenuItem>
       </Menu>
@@ -86,9 +93,9 @@
       <ExportDialog v-model:visible="showExportDialog" />
     </div>
 
-    <!-- Windows/Linux: window controls right (hidden when using system title bar) -->
+    <!-- Windows/Linux: window controls right -->
     <WindowControls
-      v-if="showWindowControls"
+      v-if="showWindowControls && platform !== 'darwin'"
       :is-maximised="isMaximised"
       @minimise="onMinimise"
       @maximise="onMaximise"
@@ -110,7 +117,7 @@ import { formatKeyBinding } from '../composables/useKeyboardShortcuts'
 import { useLocalStateStore } from '../stores/localStateStore'
 import { useUpdateCheck } from '../composables/useUpdateCheck'
 import { LANGUAGE_OPTIONS } from '../types/settings'
-import type { AppSettings } from '../types/settings'
+import type { AppSettings, ShortcutAction } from '../types/settings'
 import WindowControls from './WindowControls.vue'
 import TabsList from './TabsList.vue'
 import ImportDialog from './ImportDialog.vue'
@@ -188,11 +195,19 @@ const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent)
 
 // " (Ctrl+Shift+K)" suffix for a shortcut action's tooltip, '' when unset.
 // Reactive via settingsStore, so tooltips update when the user rebinds keys.
-function shortcutSuffix(action: 'focusAI' | 'toggleSidebar' | 'openSettings'): string {
+function shortcutSuffix(action: 'focusAI' | 'toggleSidebar'): string {
   const b = settingsStore.settings.keyboard[action]
   if (!b) return ''
   const key = formatKeyBinding(b, isMac)
   return key ? ` (${key})` : ''
+}
+
+// Right-aligned keybinding hint for a menu item, '' when unset. Reactive via
+// settingsStore, so hints follow the user's rebinds.
+function menuShortcut(action: ShortcutAction): string {
+  const b = settingsStore.settings.keyboard[action]
+  if (!b) return ''
+  return formatKeyBinding(b, isMac)
 }
 
 const hasActiveConnections = computed(() =>
@@ -228,11 +243,10 @@ function detectPlatformSync(): 'windows' | 'darwin' | 'linux' {
 const platform = ref<'windows' | 'darwin' | 'linux'>(detectPlatformSync())
 const isMaximised = ref(false)
 
-// On Windows/Linux the app draws its own window controls — but not when the
-// user opted into the OS native title bar, which already provides them.
-const showWindowControls = computed(
-  () => platform.value !== 'darwin' && !localStateStore.state.systemTitleBar
-)
+// The app draws its own window controls on every platform — but not when the
+// user opted into the OS native title bar, which already provides them. On
+// macOS they render as traffic lights on the left (see template).
+const showWindowControls = computed(() => !localStateStore.state.systemTitleBar)
 
 async function updateMaximisedState() {
   try {
@@ -271,7 +285,7 @@ async function linuxMaximise() {
       const screens = await Screens.GetAll()
       const current = screens.find((s: { isCurrent: boolean }) => s.isCurrent) || screens[0]
       if (current) {
-        Window.SetMaxSize(current.width, current.height)
+        Window.SetMaxSize(current.Size.Width, current.Size.Height)
       }
     } catch {
       // Fallback: set large max size to disable any constraint
@@ -307,7 +321,7 @@ async function onClose() {
       window.dispatchEvent(new CustomEvent('rdp:overlay-push'))
       try {
         await ElMessageBox.confirm(
-          h('div', { style: 'display:flex;flex-direction:column;gap:10px' }, [
+          h('div', { style: 'display:flex;flex-direction:column;gap:0.625rem' }, [
             h('span', t('app.closeConfirm')),
             h(ElCheckbox, {
               'onUpdate:modelValue': (v: boolean) => { dontShowAgain.value = v }
@@ -367,20 +381,14 @@ onUnmounted(() => {
 .app-header {
   display: flex;
   align-items: center;
-  height: 44px;
-  padding: 0 8px;
-  gap: 2px;
+  height: 2.75rem;
+  padding: 0 0.5rem;
+  gap: 0.125rem;
   background: var(--bg-elevated);
   flex-shrink: 0;
   position: relative;
   z-index: 10;
   --wails-draggable: drag;
-}
-
-.app-header.platform-darwin {
-  height: 52px;
-  padding: 0 10px;
-  gap: 8px;
 }
 
 .app-header::after {
@@ -413,10 +421,10 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 28px;
-  padding: 5px 8px;
+  height: 1.75rem;
+  padding: 0.3125rem 0.5rem;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--text-secondary);
   background: transparent;
@@ -450,7 +458,7 @@ onUnmounted(() => {
 }
 
 .header-btn .el-icon {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 [data-theme="light"] .app-header::after {
@@ -464,18 +472,8 @@ onUnmounted(() => {
   );
 }
 
-.mac-traffic-light-spacer {
-  width: 72px;
-  height: 1px;
-  flex-shrink: 0;
-}
-
 .app-header :deep(.window-controls) {
   --wails-draggable: no-drag;
-}
-
-.app-header.platform-darwin :deep(.window-controls) {
-  align-self: center;
 }
 
 /* ── Settings dropdown menu ── */

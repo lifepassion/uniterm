@@ -37,6 +37,10 @@ type fileTransferSession interface {
 	ChangeLocalDir(dir string) (session.FileListResult, error)
 	ListLocalDrives() ([]session.FileItem, error)
 	MakeDir(dir string) error
+	// Symlink creates a symbolic link on the remote side. Only backends with
+	// link semantics implement it (SFTP/SCP/WSL); others return an error and
+	// the frontend hides the UI entry.
+	Symlink(target, linkPath string) error
 	Remove(path string, recursive bool) error
 	Rename(oldPath, newPath string) error
 	Chmod(path string, mode os.FileMode) error
@@ -56,6 +60,40 @@ type fileTransferSession interface {
 	CancelTransfer(taskID string) error
 	PauseTransfer(taskID string) error
 	ResumeTransfer(taskID string) error
+}
+
+// transferRetry is implemented by backends that support retrying a failed
+// transfer from a frontend-held checkpoint (SFTP; SCP from Task 6). Optional
+// so the other protocol backends don't have to implement it yet.
+type transferRetry interface {
+	RetryTransfer(spec session.TransferSpec, skipCompleted []string) (string, error)
+	DismissTransfer(taskID string) error
+}
+
+// SftpRetryTransfer re-runs a failed transfer, skipping files the frontend
+// reports as already completed.
+func (a *App) SftpRetryTransfer(sessionID string, spec session.TransferSpec, skipCompleted []string) (string, error) {
+	fs, err := a.getSftp(sessionID)
+	if err != nil {
+		return "", err
+	}
+	r, ok := fs.(transferRetry)
+	if !ok {
+		return "", fmt.Errorf("retry not supported for this protocol")
+	}
+	return r.RetryTransfer(spec, skipCompleted)
+}
+
+// SftpDismissTransfer removes a retained failed task from the backend.
+func (a *App) SftpDismissTransfer(sessionID, taskID string) error {
+	fs, err := a.getSftp(sessionID)
+	if err != nil {
+		return err
+	}
+	if r, ok := fs.(transferRetry); ok {
+		return r.DismissTransfer(taskID)
+	}
+	return nil
 }
 
 func (a *App) getSftp(sid string) (fileTransferSession, error) {
@@ -118,6 +156,16 @@ func (a *App) SftpMakeDir(sessionID, dir string) error {
 		return err
 	}
 	return fs.MakeDir(dir)
+}
+
+// SftpSymlink creates a symbolic link on the remote side. Only supported by
+// SFTP/SCP/WSL backends; other protocols return a "not supported" error.
+func (a *App) SftpSymlink(sessionID, target, linkPath string) error {
+	fs, err := a.getSftp(sessionID)
+	if err != nil {
+		return err
+	}
+	return fs.Symlink(target, linkPath)
 }
 
 func (a *App) SftpRemove(sessionID, path string, recursive bool) error {
@@ -447,30 +495,21 @@ func (a *App) SftpOpenExternalEditor(sessionID, remotePath, editorCmd string) er
 		return errors.New("refusing to open binary file in external editor")
 	}
 
-	// Temp file in a per-session scratch dir (name built below).
-	dir := extEditSessionDir(sessionID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	base := sanitizePart(path.Base(remotePath))
-	ext := filepath.Ext(base)
-	stem := strings.TrimSuffix(base, ext)
-	sum := sha256.Sum256([]byte(remotePath))
-	tmp, err := writeExtEditTemp(dir, stem, sum[:4], ext, content)
-	if err != nil {
-		return err
-	}
-
-	runKey := fmt.Sprintf("%s#%d", tmp, extEditRunSeq.Add(1))
-
+	// Validate the command before any state is armed: a bad editorCmd must
+	// leave no temp file, watcher or registered run behind.
 	prog, args, err := splitCommand(editorCmd)
 	if err != nil {
 		return err
 	}
-	args = append(args, tmp)
 
-	runCtx, cancel := context.WithCancel(context.Background())
-	registerExternalEdit(sessionID, runKey, cancel)
+	// Temp copy + auto-upload watcher, shared with the system "open with"
+	// launch below — both flavours edit the same kind of temp file.
+	tmp, runCtx, runKey, err := a.startExtEditWatcher(sessionID, remotePath, fs, content)
+	if err != nil {
+		return err
+	}
+
+	args = append(args, tmp)
 
 	cmd := exec.CommandContext(runCtx, prog, args...)
 	hideProcWindow(cmd)
@@ -479,12 +518,84 @@ func (a *App) SftpOpenExternalEditor(sessionID, remotePath, editorCmd string) er
 		return fmt.Errorf("failed to start external editor %s: %w", prog, err)
 	}
 
+	a.emitExtEditStarted(sessionID, remotePath, tmp)
+	return nil
+}
+
+// SftpOpenWithSystem opens a remote file through the OS "open with" flow —
+// on Windows the system file-association picker pops up ("How do you want to
+// open this file?"), on macOS/Linux the default handler is launched (no
+// scriptable chooser exists there). Unlike SftpOpenExternalEditor there is no
+// editor command and no binary-file restriction, so doc/xlsx-style files can
+// be edited with the application the user picks. The same temp copy +
+// auto-upload watcher as the external editor is armed, so whatever the picked
+// application saves is pushed back to the remote path.
+func (a *App) SftpOpenWithSystem(sessionID, remotePath string) error {
+	fs, err := a.getSftp(sessionID)
+	if err != nil {
+		return err
+	}
+	content, err := fs.GetContent(remotePath)
+	if err != nil {
+		return err
+	}
+	tmp, _, runKey, err := a.startExtEditWatcher(sessionID, remotePath, fs, content)
+	if err != nil {
+		return err
+	}
+	if err := a.openWithSystem(tmp); err != nil {
+		unregisterExternalEdit(sessionID, runKey)
+		return err
+	}
+	a.emitExtEditStarted(sessionID, remotePath, tmp)
+	return nil
+}
+
+// OpenWithSystemLocal opens a local file through the OS "open with" flow
+// (system picker on Windows, default handler elsewhere). Used by the SFTP
+// "local" pane: no temp copy and no auto-upload — the file already lives on
+// disk and is edited in place.
+func (a *App) OpenWithSystemLocal(localPath string) error {
+	if strings.TrimSpace(localPath) == "" {
+		return errors.New("empty local path")
+	}
+	return a.openWithSystem(localPath)
+}
+
+// emitExtEditStarted pushes the "sftp:extedit" started event shared by both
+// launch flavours; the frontend toasts from it.
+func (a *App) emitExtEditStarted(sessionID, remotePath, tmp string) {
 	a.emit("sftp:extedit", map[string]interface{}{
 		"sessionId": sessionID,
 		"path":      remotePath,
 		"status":    "started",
 		"tmp":       tmp,
 	})
+}
+
+// startExtEditWatcher materializes the temp local copy of a remote file and
+// arms the auto-upload watcher for it. Shared by SftpOpenExternalEditor and
+// SftpOpenWithSystem, which differ only in how the temp file is opened. The
+// returned runCtx cancels the run (killing an editor launched with it, see
+// registerExternalEdit) and runKey unregisters it on launch failure.
+func (a *App) startExtEditWatcher(sessionID, remotePath string, fs fileTransferSession, content []byte) (tmp string, runCtx context.Context, runKey string, err error) {
+	dir := extEditSessionDir(sessionID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", nil, "", err
+	}
+	base := sanitizePart(path.Base(remotePath))
+	ext := filepath.Ext(base)
+	stem := strings.TrimSuffix(base, ext)
+	sum := sha256.Sum256([]byte(remotePath))
+	tmp, err = writeExtEditTemp(dir, stem, sum[:4], ext, content)
+	if err != nil {
+		return "", nil, "", err
+	}
+
+	runKey = fmt.Sprintf("%s#%d", tmp, extEditRunSeq.Add(1))
+
+	runCtx, cancel := context.WithCancel(context.Background())
+	registerExternalEdit(sessionID, runKey, cancel)
 
 	// One watcher per temp file: reopening the same remote file re-baselines
 	// the existing watcher (the fresh download is already the remote content)
@@ -503,7 +614,7 @@ func (a *App) SftpOpenExternalEditor(sessionID, remotePath, editorCmd string) er
 		extEditMu.Unlock()
 		go a.pollExternalEditor(runCtx, sessionID, fs, remotePath, tmp, w, content)
 	}
-	return nil
+	return tmp, runCtx, runKey, nil
 }
 
 // OpenExternalEditorLocal launches the configured external editor directly on

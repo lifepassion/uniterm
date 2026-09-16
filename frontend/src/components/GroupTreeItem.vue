@@ -17,8 +17,8 @@
     @drop.prevent="onGrpDrop"
   >
     <span class="group-arrow">
-      <el-icon v-if="expanded.has(node.group.id)"><ChevronDown :size="14" /></el-icon>
-      <el-icon v-else><ChevronRight :size="14" /></el-icon>
+      <el-icon v-if="expanded.has(node.group.id)"><ChevronDown :size="'0.875rem'" /></el-icon>
+      <el-icon v-else><ChevronRight :size="'0.875rem'" /></el-icon>
     </span>
     <span class="group-name">{{ node.group.name }}</span>
     <span v-if="totalCount > 0" class="group-count">{{ totalCount }}</span>
@@ -56,15 +56,23 @@
       @dblclick="onItemDblClick(conn)"
       @contextmenu.prevent="onConnCtxMenu($event, conn)"
     >
-      <span class="conn-icon"><component :is="connIcon(conn)" :size="14" /></span>
+      <span class="conn-icon"><component :is="connIcon(conn)" :size="'0.875rem'" /></span>
       <div class="conn-details">
         <span class="name">{{ conn.name }}</span>
         <span class="conn-meta">
           <span class="host">{{ getSubtitle(conn) }}</span>
         </span>
       </div>
+      <button
+        class="conn-fav-btn"
+        :class="{ on: favoriteStore.isFavorite(conn.id) }"
+        :title="favoriteStore.isFavorite(conn.id) ? t('sidebar.removeFromFavorites') : t('sidebar.addToFavorites')"
+        @click.stop="favoriteStore.toggle(conn.id)"
+      >
+        <Star :size="'0.75rem'" />
+      </button>
       <button class="conn-more-btn" @click.stop="onMoreClick($event, conn)" :title="t('terminal.more')">
-        <MoreHorizontal :size="14" />
+        <MoreHorizontal :size="'0.875rem'" />
       </button>
     </div>
   </template>
@@ -72,8 +80,10 @@
 
 <script setup lang="ts">
 import { inject, computed } from 'vue'
-import { ChevronDown, ChevronRight, MoreHorizontal } from '@lucide/vue'
-import type { GroupTreeNode, ConnectionConfig, ConnectionGroup } from '../types/session'
+import { ChevronDown, ChevronRight, MoreHorizontal, Star } from '@lucide/vue'
+import type { ConnectionConfig, ConnectionGroup } from '../types/session'
+import type { GroupTreeNode } from '../stores/connectionStore'
+import { useFavoriteStore } from '../stores/favoriteStore'
 
 const props = defineProps<{
   node: GroupTreeNode
@@ -100,6 +110,8 @@ const handlers = inject<any>('groupHandlers')!
 const utils = inject<any>('utils')!
 
 const { connIcon, getSubtitle, t } = utils
+
+const favoriteStore = useFavoriteStore()
 
 function onToggle() {
   handlers.onToggleGroup(props.node.group.id)
@@ -163,14 +175,14 @@ function onMoreClick(e: MouseEvent, conn: ConnectionConfig) {
 .group-header {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 10px 6px 0;
+  gap: 0.25rem;
+  padding: 0.375rem 0.625rem 0.375rem 0;
   cursor: pointer;
   user-select: none;
   border-radius: var(--radius-sm);
   transition: background 0.12s ease;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 .group-header:hover {
@@ -191,9 +203,9 @@ function onMoreClick(e: MouseEvent, conn: ConnectionConfig) {
 .connection-item.drop-after::after {
   content: '';
   position: absolute;
-  left: 6px;
-  right: 6px;
-  height: 2px;
+  left: 0.375rem;
+  right: 0.375rem;
+  height: 0.125rem;
   background: var(--accent);
   border-radius: 1px;
   z-index: 2;
@@ -210,7 +222,7 @@ function onMoreClick(e: MouseEvent, conn: ConnectionConfig) {
 .group-arrow {
   display: inline-flex;
   align-items: center;
-  width: 16px;
+  width: 1rem;
   color: var(--text-disabled);
   flex-shrink: 0;
 }
@@ -223,11 +235,11 @@ function onMoreClick(e: MouseEvent, conn: ConnectionConfig) {
 
 .group-count {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-disabled);
   background: var(--bg-subtle);
-  padding: 0 5px;
-  border-radius: 8px;
+  padding: 0 0.3125rem;
+  border-radius: 0.5rem;
   flex-shrink: 0;
 }
 
@@ -235,16 +247,16 @@ function onMoreClick(e: MouseEvent, conn: ConnectionConfig) {
 .connection-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
+  gap: 0.375rem;
+  padding: 0.5rem 0.625rem;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.12s ease;
-  margin-bottom: 2px;
+  margin-bottom: 0.125rem;
   user-select: none;
 }
 .connection-item.indented {
-  padding-left: 24px;
+  padding-left: 1.5rem;
 }
 .connection-item:hover {
   background: var(--bg-hover);
@@ -266,15 +278,15 @@ function onMoreClick(e: MouseEvent, conn: ConnectionConfig) {
   display: none;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 1.5rem;
+  height: 1.5rem;
   border: none;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
-  margin-left: auto;
+  margin-left: 0;
   padding: 0;
 }
 .connection-item:hover .conn-more-btn {
@@ -285,11 +297,43 @@ function onMoreClick(e: MouseEvent, conn: ConnectionConfig) {
   color: var(--text-primary);
 }
 
+/* Favorite toggle: always reserves its slot and sits at the right edge so
+   rows align; revealed on hover and while favorited */
+.conn-fav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.connection-item:hover .conn-fav-btn,
+.conn-fav-btn.on {
+  opacity: 1;
+  pointer-events: auto;
+}
+.conn-fav-btn.on {
+  color: var(--warning);
+}
+.conn-fav-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
 .conn-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
+  width: 1rem;
   flex-shrink: 0;
   color: var(--text-muted);
 }
@@ -297,13 +341,13 @@ function onMoreClick(e: MouseEvent, conn: ConnectionConfig) {
 .conn-details {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
   min-width: 0;
 }
 
 .name {
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
@@ -314,7 +358,7 @@ function onMoreClick(e: MouseEvent, conn: ConnectionConfig) {
 
 .host {
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -325,7 +369,7 @@ function onMoreClick(e: MouseEvent, conn: ConnectionConfig) {
 .conn-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   min-width: 0;
 }
 </style>

@@ -2,7 +2,7 @@
   <el-dialog append-to-body
     v-model="visible"
     :title="t('deleteRepo.title')"
-    width="440px"
+    width="27.5rem"
     :close-on-click-modal="false"
     @close="handleClose"
   >
@@ -66,26 +66,26 @@ async function handleSubmit() {
 .delete-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0.75rem;
 }
 
 .delete-body p {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-primary);
 }
 
 .delete-desc {
   margin: 0;
-  padding-left: 20px;
-  font-size: 13px;
+  padding-left: 1.25rem;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
   line-height: 1.8;
 }
 
 .form-error {
   color: var(--el-color-danger);
-  font-size: 13px;
-  margin-top: 12px;
+  font-size: 0.8125rem;
+  margin-top: 0.75rem;
 }
 </style>

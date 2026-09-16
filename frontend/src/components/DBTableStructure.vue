@@ -13,24 +13,24 @@
         <div class="section-header">
           <div class="section-title">{{ t('db.columns') }}</div>
           <button class="btn btn-default btn-sm" @click="startAddColumn">
-            <Plus :size="14" /> {{ t('db.addColumn') }}
+            <Plus :size="'0.875rem'" /> {{ t('db.addColumn') }}
           </button>
         </div>
         <el-table :data="schema?.columns || []" border size="small" style="width:100%">
           <el-table-column prop="name" :label="t('db.colName')" />
           <el-table-column prop="type" :label="t('db.colType')" />
-          <el-table-column :label="t('db.colNullable')" width="80">
+          <el-table-column :label="t('db.colNullable')" :width="uiPx(80)">
             <template #default="{ row }">
               {{ row.nullable ? 'YES' : 'NO' }}
             </template>
           </el-table-column>
           <el-table-column prop="defaultVal" :label="t('db.colDefault')" />
-          <el-table-column :label="t('db.colPrimary')" width="50">
+          <el-table-column :label="t('db.colPrimary')" :width="uiPx(50)">
             <template #default="{ row }">
               <span v-if="row.isPrimary">PK</span>
             </template>
           </el-table-column>
-          <el-table-column :label="t('db.colAutoIncrement')" width="50">
+          <el-table-column :label="t('db.colAutoIncrement')" :width="uiPx(50)">
             <template #default="{ row }">
               <span v-if="row.defaultType === 'auto'">AI</span>
             </template>
@@ -39,13 +39,13 @@
             v-if="caps?.['supportsComment']"
             prop="comment"
             :label="t('db.colComment')"
-            min-width="120"
+            :min-width="uiPx(120)"
             show-overflow-tooltip
           />
-          <el-table-column :label="t('db.actions')" width="80">
+          <el-table-column :label="t('db.actions')" :width="uiPx(80)">
             <template #default="{ row }">
-              <button v-if="caps?.['supportsModifyColumn']" class="btn btn-ghost btn-icon btn-sm" :title="t('common.edit')" @click="startEditColumn(row)"><Pencil :size="14" /></button>
-              <button class="btn btn-ghost btn-icon btn-sm danger" :title="t('common.delete')" @click="onDropColumn(row.name)"><Trash2 :size="14" /></button>
+              <button v-if="caps?.['supportsModifyColumn']" class="btn btn-ghost btn-icon btn-sm" :title="t('common.edit')" @click="startEditColumn(row)"><Pencil :size="'0.875rem'" /></button>
+              <button class="btn btn-ghost btn-icon btn-sm danger" :title="t('common.delete')" @click="onDropColumn(row.name)"><Trash2 :size="'0.875rem'" /></button>
             </template>
           </el-table-column>
         </el-table>
@@ -55,7 +55,7 @@
         <div class="section-header">
           <div class="section-title">{{ t('db.indexes') }}</div>
           <button class="btn btn-default btn-sm" @click="startAddIndex">
-            <Plus :size="14" /> {{ t('db.addIndex') }}
+            <Plus :size="'0.875rem'" /> {{ t('db.addIndex') }}
           </button>
         </div>
         <el-table :data="schema?.indexes || []" border size="small" style="width:100%">
@@ -65,23 +65,23 @@
               {{ row.columns?.join(', ') }}
             </template>
           </el-table-column>
-          <el-table-column :label="t('db.idxType')" width="100">
+          <el-table-column :label="t('db.idxType')" :width="uiPx(100)">
             <template #default="{ row }">
               <span v-if="row.isPrimary" class="idx-type idx-type-pk">{{ t('db.primary') }}</span>
               <span v-else-if="row.unique" class="idx-type idx-type-uq">{{ t('db.unique') }}</span>
               <span v-else class="idx-type idx-type-idx">{{ t('db.index') }}</span>
             </template>
           </el-table-column>
-          <el-table-column :label="t('db.actions')" width="80">
+          <el-table-column :label="t('db.actions')" :width="uiPx(80)">
             <template #default="{ row }">
-              <button class="btn btn-ghost btn-icon btn-sm danger" :title="t('common.delete')" @click="onDropIndex(row)"><Trash2 :size="14" /></button>
+              <button class="btn btn-ghost btn-icon btn-sm danger" :title="t('common.delete')" @click="onDropIndex(row)"><Trash2 :size="'0.875rem'" /></button>
             </template>
           </el-table-column>
         </el-table>
       </div>
 
-      <el-dialog append-to-body v-model="editDialogVisible" :title="t('db.editColumn')" width="450px">
-        <el-form v-if="editingColumn" label-width="100px">
+      <el-dialog append-to-body v-model="editDialogVisible" :title="t('db.editColumn')" width="28.125rem">
+        <el-form v-if="editingColumn" label-width="6.25rem">
           <el-form-item :label="t('db.colName')">
             <el-input v-model="editingColumn.name" disabled />
           </el-form-item>
@@ -128,8 +128,8 @@
         </template>
       </el-dialog>
 
-      <el-dialog append-to-body v-model="addColVisible" :title="t('db.addColumn')" width="450px">
-        <el-form label-width="100px">
+      <el-dialog append-to-body v-model="addColVisible" :title="t('db.addColumn')" width="28.125rem">
+        <el-form label-width="6.25rem">
           <el-form-item :label="t('db.colName')">
             <el-input v-model="addColName" />
           </el-form-item>
@@ -176,8 +176,8 @@
         </template>
       </el-dialog>
 
-      <el-dialog append-to-body v-model="addIdxVisible" :title="t('db.addIndex')" width="400px">
-        <el-form label-width="100px">
+      <el-dialog append-to-body v-model="addIdxVisible" :title="t('db.addIndex')" width="25rem">
+        <el-form label-width="6.25rem">
           <el-form-item :label="t('db.idxName')">
             <el-input v-model="addIdxName" />
           </el-form-item>
@@ -220,6 +220,7 @@ import { msg } from '../services/message'
 import { useI18n } from '../i18n'
 import { GetTableSchema, AddColumn, ModifyColumn, DropColumn, AddIndex, DropIndexOp, GetDBCapabilities } from '../../bindings/github.com/ys-ll/uniterm/app'
 import type { SchemaResult, ColumnInfo, IndexInfo } from '../types/database'
+import { uiPx } from '../utils/uiScale'
 
 const { t } = useI18n()
 
@@ -532,14 +533,14 @@ async function onAddIndex() {
 .db-table-structure {
   height: 100%;
   overflow: auto;
-  padding: 8px;
+  padding: 0.5rem;
   position: relative;
 }
 .placeholder {
   font-family: var(--font-ui);
   color: var(--text-secondary);
   text-align: center;
-  padding: 40px 0;
+  padding: 2.5rem 0;
 }
 .loading-overlay {
   position: absolute;
@@ -554,12 +555,12 @@ async function onAddIndex() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 0.75rem;
 }
 .spinner {
-  width: 28px;
-  height: 28px;
-  border: 3px solid var(--border-subtle);
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 0.1875rem solid var(--border-subtle);
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -569,22 +570,22 @@ async function onAddIndex() {
 }
 .loading-text {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary);
 }
 .section {
-  margin-bottom: 16px;
+  margin-bottom: 1rem;
 }
 .section-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 .section-header .btn { margin-left: auto; }
 .section-title {
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -593,12 +594,12 @@ async function onAddIndex() {
   gap: 0;
 }
 .toggle-btn {
-  padding: 5px 14px;
+  padding: 0.3125rem 0.875rem;
   border: 1px solid var(--border-subtle);
   background: var(--bg-base);
   color: var(--text-secondary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -624,11 +625,11 @@ async function onAddIndex() {
   opacity: 0.4;
   cursor: not-allowed;
 }
-.exec-btn { margin-top: 4px; }
+.exec-btn { margin-top: 0.25rem; }
 .idx-type {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
-  padding: 1px 6px;
+  padding: 1px 0.375rem;
   border-radius: var(--radius-sm);
 }
 .idx-type-pk { color: var(--accent); }
@@ -646,12 +647,12 @@ async function onAddIndex() {
   background: var(--bg-elevated);
 }
 .el-autocomplete-suggestion__list {
-  padding: 4px 0;
+  padding: 0.25rem 0;
 }
 .el-autocomplete-suggestion__item {
   color: var(--text-primary);
-  padding: 4px 12px;
-  font-size: 13px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
 }
 .el-autocomplete-suggestion__item:hover {
   background: var(--bg-hover);

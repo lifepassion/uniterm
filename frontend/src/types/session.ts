@@ -17,11 +17,12 @@ export interface ConnectionConfig {
   id: string
   name: string
   remark?: string
-  type: 'ssh' | 'telnet' | 'mosh' | 'rdp' | 'vnc' | 'spice' | 'database' | 'local' | 'wsl' | 'sftp' | 'scp' | 'monitor' | 'ftp' | 'serial' | 'smb' | 'webdav' | 's3' | 'tcp' | 'k8s' | 'container' | 'x11-desktop'
+  type: 'ssh' | 'telnet' | 'mosh' | 'rdp' | 'vnc' | 'spice' | 'database' | 'redis' | 'mongodb' | 'elasticsearch' | 'local' | 'wsl' | 'wsl-file' | 'sftp' | 'scp' | 'monitor' | 'ftp' | 'serial' | 'smb' | 'webdav' | 's3' | 'tcp' | 'k8s' | 'container' | 'x11-desktop'
   host: string
   port: number
   user: string
-  authType: 'password' | 'key' | 'keyText' | 'agent' | 'identity'
+  authType: 'password' | 'key' | 'keyText' | 'agent' | 'identity' | 'kerberos' | 'apikey'
+  kerberosRealm?: string // realm used for IP targets, e.g. EXAMPLE.COM
   password?: string
   keyPath?: string
   keyContent?: string // inline private-key text (authType === 'keyText')
@@ -51,7 +52,7 @@ export interface ConnectionConfig {
   serialDataBits?: number
   serialStopBits?: number
   serialParity?: string
-  dbType?: string   // database type key
+  dbType?: string   // database type key — SQL family only (mysql/postgres/oracle/sqlserver/rqlite); Redis/MongoDB/Elasticsearch are standalone types
   dbName?: string   // default database name
   dbParams?: string // extra DSN query parameters, e.g. "sslmode=require&connect_timeout=30"
   // Elasticsearch / OpenSearch. The auth type reuses the shared `authType`
@@ -134,6 +135,10 @@ export interface ConnectionConfig {
   // (XQuartz on macOS, VcXsrv on Windows). Silent degradation on
   // missing $DISPLAY / xauth — see backend x11_forward.go.
   x11Forwarding?: boolean
+  agentForwarding?: boolean
+  // Inject OSC-7 cwd reporting by changing supported SSH shell startup.
+  // Disabled by default.
+  shellIntegration?: boolean
   // Enable session output log automatically on first connect. Applies
   // to terminal-stream types (ssh/telnet/serial/mosh/local).
   logOnConnect?: boolean

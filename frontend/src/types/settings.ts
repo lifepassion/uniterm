@@ -90,6 +90,11 @@ export interface TerminalSettings {
   // Override for the session output log directory. Empty means the
   // OS default under ~/Documents/uniTerm/logs.
   sessionLogDir: string
+  // Default local directory for files received with ZMODEM sz. Empty keeps
+  // the existing behavior of asking for a directory on every transfer.
+  zmodemDownloadDir: string
+  // Filename template: %S session, %H host, %M month, %D day, %h hour, %m minute.
+  sessionLogFilename: string
   // Characters that act as word boundaries for xterm.js's double-click
   // word selection. Default mirrors the built-in xterm separators
   // extended with the most common shell / path punctuation, so that
@@ -140,8 +145,9 @@ export interface AISettings {
 
 export type ShortcutAction =
   | 'nextTab' | 'prevTab'
-  | 'newConnection' | 'toggleSidebar'
+  | 'newConnection' | 'toggleSidebar' | 'openQuickCommands'
   | 'focusAI' | 'focusTerminal' | 'lockAI'
+  | 'maximizePanel'
   | 'closePanel'
   | 'navigatePrev' | 'navigateNext'
   | 'duplicateSession'
@@ -154,15 +160,29 @@ export type ShortcutAction =
   | 'zoomFontIn'
   | 'zoomFontOut'
 
+// User-facing bindings only use ctrl/shift/alt. On macOS the runtime mirrors
+// every ctrl combo to Cmd (per-action shortcuts register both; the digit
+// shortcuts treat Ctrl and Cmd as one modifier), so Cmd is always covered by
+// ctrl. Alt bindings answer to the Option key (same key event).
 export interface KeyBinding {
   ctrl: boolean
-  meta?: boolean
   shift: boolean
   alt: boolean
   key: string
 }
 
-export type KeyboardSettings = Partial<Record<ShortcutAction, KeyBinding>>
+// tabSwitchModifier / panelSwitchModifier are not per-action bindings: only
+// their modifier flags (ctrl/meta/shift/alt) are read, their `key` stays
+// empty. The configured combo held together with a digit key (1-9) switches
+// to that tab / workspace panel, handled by onPlatformSystemShortcut in
+// App.vue. Unset = platform default (tabs: Ctrl on Windows/Linux, Cmd on
+// macOS; panels: Alt/Option); an entry with no modifier set disables that
+// digit family entirely. When both resolve to the same combo, tab switching
+// wins and the panel digit shortcuts are suppressed.
+export type KeyboardSettings = Partial<Record<ShortcutAction, KeyBinding>> & {
+  tabSwitchModifier?: KeyBinding
+  panelSwitchModifier?: KeyBinding
+}
 
 export const SHORTCUT_LABELS: Record<ShortcutAction, string> = {
   newConnection: 'shortcut.newConnection',
@@ -170,8 +190,10 @@ export const SHORTCUT_LABELS: Record<ShortcutAction, string> = {
   prevTab: 'shortcut.prevTab',
   navigatePrev: 'shortcut.navigatePrev',
   navigateNext: 'shortcut.navigateNext',
+  maximizePanel: 'shortcut.maximizePanel',
   closePanel: 'shortcut.closePanel',
   toggleSidebar: 'shortcut.toggleSidebar',
+  openQuickCommands: 'shortcut.openQuickCommands',
   focusTerminal: 'shortcut.focusTerminal',
   focusAI: 'shortcut.focusAI',
   lockAI: 'shortcut.lockAI',
@@ -191,9 +213,11 @@ export const DEFAULT_KEYBOARD: KeyboardSettings = {
   prevTab: { ctrl: true, shift: true, alt: false, key: 'tab' },
   newConnection: { ctrl: true, shift: true, alt: false, key: 'n' },
   toggleSidebar: { ctrl: true, shift: true, alt: false, key: 'h' },
+  openQuickCommands: { ctrl: true, shift: true, alt: false, key: 'm' },
   focusTerminal: { ctrl: true, shift: true, alt: false, key: 'j' },
   focusAI: { ctrl: true, shift: true, alt: false, key: 'k' },
   closePanel: { ctrl: true, shift: true, alt: false, key: 'q' },
+  maximizePanel: { ctrl: true, shift: true, alt: false, key: 'enter' },
   navigatePrev: { ctrl: false, shift: false, alt: true, key: 'arrowleft' },
   navigateNext: { ctrl: false, shift: false, alt: true, key: 'arrowright' },
   lockAI: { ctrl: true, shift: true, alt: false, key: 'l' },
@@ -208,6 +232,23 @@ export const DEFAULT_KEYBOARD: KeyboardSettings = {
   zoomFontOut: { ctrl: true, shift: false, alt: false, key: '-' },
 }
 
+// Older settings.json files may carry a `meta` flag on bindings. Ctrl now
+// covers Cmd on macOS, so legacy meta-only bindings migrate to ctrl and the
+// flag itself is dropped; untouched actions fall back to their platform
+// defaults.
+export function normalizeKeyBindings(kb: KeyboardSettings): KeyboardSettings {
+  const out = { ...DEFAULT_KEYBOARD, ...kb } as KeyboardSettings & Record<string, KeyBinding | undefined>
+  for (const key of Object.keys(out)) {
+    const b = out[key] as (KeyBinding & { meta?: boolean }) | undefined
+    if (b && b.meta) {
+      const migrated = { ...b, ctrl: true }
+      delete migrated.meta
+      out[key] = migrated
+    }
+  }
+  return out
+}
+
 export interface SFTPBookmarks {
   localPaths: string[]
   remotePaths: string[]
@@ -216,13 +257,23 @@ export interface SFTPBookmarks {
 export interface AppSettings {
   theme: Theme
   language: Language
+  /** UI design baseline in px; the rem root derives from it (uiFontSize/12*16). */
+  uiFontSize: number
   terminal: TerminalSettings
   ai: AISettings
   keyboard: KeyboardSettings
   autoCheckUpdate: boolean
+  // Update source for checks and downloads: "auto" picks by UI language with
+  // cross-source fallback; "github" forces the official source; "gitee"
+  // forces the domestic mirror.
+  updateSource: 'auto' | 'github' | 'gitee'
   closeTabPrompt: boolean
   closeAppPrompt: boolean
   sftpBookmarks: SFTPBookmarks
+  // Whether the dual-pane SFTP tab's transfer panel starts out visible.
+  // The panel auto-pops on every new transfer task regardless of this flag;
+  // the flag only remembers the last visibility across restarts.
+  sftpTransferPanelVisible: boolean
   customTerminalThemes: CustomTerminalTheme[]
   defaultLocalShell: string
   // Which side of the tab the close (X) button sits on.
@@ -257,9 +308,14 @@ export const SIDEBAR_TAB_ORDER: { key: string; labelKey: string }[] = [
   { key: 'personalization', labelKey: 'sidebar.personalization' },
 ]
 
+// Platform UI text baseline: macOS native text runs larger than the
+// Windows 12px design size. Mirrors index.html's pre-paint detection.
+export const DEFAULT_UI_FONT_SIZE = /Mac|iPhone|iPad|iPod/.test(navigator.platform) ? 14 : 12
+
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   language: 'system',
+  uiFontSize: DEFAULT_UI_FONT_SIZE,
   terminal: {
     theme: FOLLOW_APP_THEME,
     fontFamily: 'JetBrains Mono Variable',
@@ -278,6 +334,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     cursorStyle: 'block',
     minimumContrast: 4.5,
     sessionLogDir: '',
+    zmodemDownloadDir: '',
+    sessionLogFilename: '%S_%H_%M%D_%h%m.log',
     wordSeparator: '\\ :;~`!@#$%^&*()=+|[]{}\'",<>?',
     showLineNumbers: false,
     showTimestamps: false,
@@ -299,12 +357,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
   keyboard: { ...DEFAULT_KEYBOARD },
   autoCheckUpdate: true,
+  updateSource: 'auto',
   closeTabPrompt: true,
   closeAppPrompt: true,
   sftpBookmarks: {
     localPaths: [],
     remotePaths: []
   },
+  sftpTransferPanelVisible: false,
   customTerminalThemes: [],
   defaultLocalShell: '',
   tabCloseButton: 'left',
@@ -406,9 +466,18 @@ export const LANGUAGE_OPTIONS: { value: Locale; label: string; native: string }[
   { value: 'ru', label: 'Русский', native: 'Русский' },
 ]
 
+export interface UpdateAsset {
+  name: string
+  url: string
+  sha256: string
+  source: 'github' | 'gitee'
+}
+
 export interface UpdateInfo {
   hasUpdate: boolean
   current: string
   latest: string
   releaseUrl: string
+  changelog: string
+  assets: UpdateAsset[]
 }

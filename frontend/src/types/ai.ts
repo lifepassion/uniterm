@@ -2,12 +2,6 @@ export type ExecutionMode = 'confirm_all' | 'confirm_write' | 'confirm_dangerous
 
 export type AIAgentStatus = 'thinking' | 'outputting' | 'executing' | 'confirming'
 
-export interface AIConfig {
-  apiKey: string
-  baseURL: string
-  model: string
-}
-
 export interface ToolCall {
   id: string
   type: 'function'

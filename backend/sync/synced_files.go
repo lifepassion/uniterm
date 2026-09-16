@@ -10,9 +10,15 @@ package sync
 // ai-sessions.json and skills.json are intentionally absent — they are
 // local-only data and must never be committed to the sync repo (a stray
 // ai-sessions.json left in the repo dir from an old build stays untracked).
+//
+// settings.json is intentionally absent: it is device-local (theme,
+// paths, shells, keybindings, UI state) and changes too often to sync
+// well. The syncable AI slice (model catalog + maxTurns) lives in
+// ai.json instead; see AIConfigStore.
 var syncedFiles = []string{
 	"connections.json",
-	"settings.json",
+	"favorites.json",
+	"ai.json",
 	"quickCommands.json",
 	"tunnels.json",
 	"identities.json",

@@ -44,5 +44,5 @@ function onConfirm() {
 </script>
 
 <style scoped>
-.yaml-error { color: var(--el-color-danger, #f56); padding: 8px 2px 0; font-size: 12px; }
+.yaml-error { color: var(--el-color-danger, #f56); padding: 0.5rem 0.125rem 0; font-size: 0.75rem; }
 </style>

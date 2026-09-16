@@ -3,13 +3,13 @@
     :model-value="visible"
     @update:model-value="(v: boolean) => !v && onCancel()"
     :title="t('encrypt.title')"
-    width="480px"
+    width="30rem"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
     :show-close="false"
   >
     <p v-if="existingSecrets > 0" class="encrypt-hint">{{ t('encrypt.existing', { n: existingSecrets }) }}</p>
-    <el-form label-width="120px" class="encrypt-form" @submit.prevent="onConfirm">
+    <el-form label-width="7.5rem" class="encrypt-form" @submit.prevent="onConfirm">
       <el-form-item :label="t('config.encryption')">
         <el-select v-model="mode" popper-class="mode-select-popper" style="width: 100%">
           <el-option :label="t('encrypt.keychain')" value="keychain">
@@ -89,7 +89,7 @@ function onCancel() { emit('update:visible', false) }
 </script>
 
 <style scoped>
-.encrypt-form { display: flex; flex-direction: column; gap: 4px; }
-.encrypt-hint { margin: 0 0 12px; color: var(--text-secondary); font-size: 13px; }
-.form-error { color: var(--el-color-danger); font-size: 13px; margin-top: 8px; }
+.encrypt-form { display: flex; flex-direction: column; gap: 0.25rem; }
+.encrypt-hint { margin: 0 0 0.75rem; color: var(--text-secondary); font-size: 0.8125rem; }
+.form-error { color: var(--el-color-danger); font-size: 0.8125rem; margin-top: 0.5rem; }
 </style>

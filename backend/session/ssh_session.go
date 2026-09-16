@@ -45,16 +45,25 @@ const (
 
 type SSHSession struct {
 	baseSession
-	client       *ssh.Client
-	session      *ssh.Session
-	stdin        io.WriteCloser
-	stdout       io.Reader
-	stderr       io.Reader
-	quit         chan struct{}
-	quitOnce     sync.Once
-	authAnswerCh chan []byte
-	expectOutput *postLoginOutputBuffer
-	x11Forwarder *x11Forwarder
+	// outputRouteMu makes the binary/text routing decision atomic with
+	// EndZmodem. Without it, readLoop could observe binary mode, get paused,
+	// then emit post-transfer shell output as binary after EndZmodem returned.
+	outputRouteMu       sync.Mutex
+	client              *ssh.Client
+	session             *ssh.Session
+	stdin               io.WriteCloser
+	stdout              io.Reader
+	stderr              io.Reader
+	quit                chan struct{}
+	quitOnce            sync.Once
+	authAnswerCh        chan []byte
+	expectOutput        *postLoginOutputBuffer
+	x11Forwarder        *x11Forwarder
+	integrationTempPath string
+
+	// osc7 extracts OSC-7 cwd reports emitted by the remote shell or tools.
+	// Only used from the readLoop goroutine.
+	osc7 osc7Scanner
 
 	enc            encoding.Encoding     // input(write) codec; nil = utf-8 passthrough
 	encoder        transform.Transformer // cached encoder; nil = utf-8 passthrough (F-003)
@@ -71,6 +80,12 @@ type SSHSession struct {
 	// for Microsoft's OpenSSH for Windows, "" otherwise). Set once during
 	// Connect from the server identification string.
 	remoteOS string
+
+	// cwdHookInstalled records that the runtime OSC-7 cwd hook has already
+	// been written to this session's shell, so re-toggling follow does not
+	// re-send the snippet. Session objects are recreated on reconnect, so the
+	// flag resets naturally and the reconnect re-injection still fires.
+	cwdHookInstalled atomic.Bool
 }
 
 func NewSSHSession(id string) *SSHSession {
@@ -213,16 +228,26 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 		return answers, nil
 	}
 
-	authMethods := makeSSHAuthMethods(config, kbCallback)
 	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
-	clientConfig := &ssh.ClientConfig{
-		User:            config.User,
-		Auth:            authMethods,
-		Timeout:         30 * time.Second,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	newConfig := func(challenge ssh.KeyboardInteractiveChallenge) sshClientConfigFactory {
+		return func() (*ssh.ClientConfig, func(), error) {
+			authMethods, cleanup, err := makeSSHAuthMethodsForAttempt(config, challenge)
+			if err != nil {
+				return nil, nil, err
+			}
+			return &ssh.ClientConfig{
+				User:            config.User,
+				Auth:            authMethods,
+				Timeout:         30 * time.Second,
+				HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			}, cleanup, nil
+		}
 	}
-
-	client, err := dialSSHWithCipherFallback(addr, clientConfig, func() (net.Conn, error) {
+	var keyboardConfig sshClientConfigFactory
+	if config.AuthType != "kerberos" {
+		keyboardConfig = newConfig(kbCallback)
+	}
+	client, err := dialSSHWithAuthRetry(addr, newConfig(nil), keyboardConfig, func() (net.Conn, error) {
 		return dialFirstHop(addr, config.Proxy)
 	})
 	if err != nil {
@@ -243,6 +268,15 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 		client.Close()
 		s.setStatus(StatusError)
 		return fmt.Errorf("new session: %w", err)
+	}
+
+	if config.AgentForwarding {
+		if err := requestAgentForwarding(client, session); err != nil {
+			// Match OpenSSH -A semantics: forwarding failure is visible but does
+			// not discard an otherwise usable SSH connection. This commonly
+			// happens when AllowAgentForwarding is disabled on the server.
+			s.emitData([]byte("\r\n\x1b[33m[ssh agent forwarding: " + err.Error() + "]\x1b[0m\r\n"))
+		}
 	}
 
 	modes := ssh.TerminalModes{
@@ -312,23 +346,33 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 		return fmt.Errorf("stderr pipe: %w", err)
 	}
 
-	if err := session.Shell(); err != nil {
+	// Shell integration changes normal shell startup, so it is opt-in.
+	startCmd, integrationTempPath := "", ""
+	if config.ShellIntegration {
+		startCmd, integrationTempPath = injectShellIntegration(client)
+	}
+	if startCmd != "" {
+		if err := session.Start(startCmd); err != nil {
+			sshRemoveRemoteTemp(client, integrationTempPath)
+			integrationTempPath = ""
+			log.Writef("ssh: integration start failed, falling back to plain shell: %v", err)
+			if err := session.Shell(); err != nil {
+				session.Close()
+				client.Close()
+				s.setStatus(StatusError)
+				return fmt.Errorf("shell: %w", err)
+			}
+		}
+	} else if err := session.Shell(); err != nil {
 		session.Close()
 		client.Close()
 		s.setStatus(StatusError)
 		return fmt.Errorf("shell: %w", err)
 	}
 
-	go func() {
-		werr := session.Wait()
-		last, _ := s.lastRecv.Load().([]byte)
-		sent, _ := s.lastSent.Load().([]byte)
-		log.Writef("ssh disconnect: session.Wait returned (%v), %s lastRecv=%s lastSent=%s", werr, s.kaDiag(), tailHex(last, 64), tailHex(sent, 32))
-		s.Disconnect()
-	}()
-
 	s.client = client
 	s.session = session
+	s.integrationTempPath = integrationTempPath
 	s.stdin = stdinPipe
 	s.stdout = stdoutPipe
 	s.stderr = stderrPipe
@@ -338,6 +382,14 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 	if cols, rows := s.GetPendingSize(); cols > 0 && rows > 0 {
 		_ = s.session.WindowChange(rows, cols)
 	}
+
+	go func() {
+		werr := session.Wait()
+		last, _ := s.lastRecv.Load().([]byte)
+		sent, _ := s.lastSent.Load().([]byte)
+		log.Writef("ssh disconnect: session.Wait returned (%v), %s lastRecv=%s lastSent=%s", werr, s.kaDiag(), tailHex(last, 64), tailHex(sent, 32))
+		s.Disconnect()
+	}()
 
 	go s.readLoop()
 	go s.readStderr()
@@ -385,18 +437,36 @@ func (s *SSHSession) readLoop() {
 			s.RecordReadActivity()
 			data := buf[:n]
 			// lastRecv outlives this iteration (Disconnect logs it after
-			// readLoop returns) so it must hold an independent copy.
+			// readLoop returns) so it must hold an independent copy. It
+			// keeps the RAW server bytes (diagnostics), not the cleaned
+			// stream below.
 			s.lastRecv.Store(append([]byte(nil), data...))
-			s.offerExpectOutput(data)
+			// OSC-7 extraction runs on the RAW byte stream, BEFORE decoding:
+			// the sequence is pure ASCII while legacy codecs (GBK/Big5/...)
+			// could mangle its bytes or withhold a fragment in their
+			// cross-chunk multibyte leftover. The cwd itself is percent-
+			// decoded UTF-8 and goes straight to the sink, never back into
+			// the terminal stream. The cleaned remainder replaces the data
+			// for every downstream consumer so stripped sequences never
+			// render. During zmodem transfers the raw bytes are emitted
+			// unchanged (binary fidelity); the scanner still runs so its
+			// state cannot desync.
+			cwd, cleaned, found := s.osc7.Feed(data)
+			if found && TerminalCwdSink != nil {
+				TerminalCwdSink(s.id, cwd)
+			}
+			s.offerExpectOutput(cleaned)
+			s.outputRouteMu.Lock()
 			if s.IsZmodemMode() {
 				s.emitBinary(data)
 			} else if looksLikeZmodemHeader(data) {
 				log.Writef("ssh: zmodem header detected in output, switching to binary mode (may be a false positive on vim/TUI output)")
-				s.SetZmodemMode(true)
+				s.baseSession.SetZmodemMode(true)
 				s.emitBinary(data)
 			} else {
-				s.emitData(s.decodeOutput(data))
+				s.emitData(s.decodeOutput(cleaned))
 			}
+			s.outputRouteMu.Unlock()
 		}
 		if err != nil {
 			if err != io.EOF {
@@ -549,6 +619,7 @@ func (s *SSHSession) Write(data []byte) error {
 // failure, or explicit user close).
 func (s *SSHSession) Disconnect() error {
 	s.quitOnce.Do(func() {
+		s.SetZmodemMode(false)
 		close(s.quit)
 		if s.x11Forwarder != nil {
 			s.x11Forwarder.stop()
@@ -558,11 +629,41 @@ func (s *SSHSession) Disconnect() error {
 			s.session.Close()
 		}
 		if s.client != nil {
+			sshCleanupRemoteTemp(s.client, s.integrationTempPath)
+			s.integrationTempPath = ""
 			s.client.Close()
 		}
 		s.setStatus(StatusDisconnected)
 	})
 	return nil
+}
+
+// InjectCwdHook installs the OSC-7 cwd reporting hook into the shell that is
+// already running on this session's pty (typed in via stdin). The shell is
+// detected over a separate exec channel, exactly like startup injection. The
+// hook is installed only once per session; a failed attempt stays un-flagged
+// so a later retry re-runs detection. It reports whether the hook was
+// injected NOW (false means it was already installed from an earlier call).
+func (s *SSHSession) InjectCwdHook() (bool, error) {
+	if s.cwdHookInstalled.Load() {
+		return false, nil
+	}
+	if s.client == nil {
+		return false, fmt.Errorf("ssh session not connected")
+	}
+	shell, err := sshRunCommand(s.client, "echo $SHELL", "", sshIntegrationTimeout)
+	if err != nil {
+		return false, fmt.Errorf("detect shell: %w", err)
+	}
+	snippet, ok := buildRuntimeCwdHook(strings.TrimSpace(shell))
+	if !ok {
+		return false, fmt.Errorf("unsupported shell for cwd hook: %s", strings.TrimSpace(shell))
+	}
+	if err := s.Write([]byte(snippet)); err != nil {
+		return false, err
+	}
+	s.cwdHookInstalled.Store(true)
+	return true, nil
 }
 
 func (s *SSHSession) Resize(cols, rows int) error {
@@ -603,10 +704,14 @@ func (s *SSHSession) SetEncoding(name string) {
 
 // decodeOutput converts a chunk of remote bytes to UTF-8 using the configured
 // decoder. Partial trailing multibyte sequences are buffered until the next
-// call. Must only be called from the single readLoop goroutine.
+// call. The session lock serializes normal reads with ZMODEM trailing output.
 func (s *SSHSession) decodeOutput(data []byte) []byte {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.decodeOutputLocked(data)
+}
+
+func (s *SSHSession) decodeOutputLocked(data []byte) []byte {
 	if s.decoder == nil {
 		return data
 	}
@@ -635,6 +740,34 @@ func (s *SSHSession) decodeOutput(data []byte) []byte {
 		s.decodeLeftover = src[:0]
 	}
 	return out
+}
+
+// SetZmodemMode serializes externally requested mode changes with readLoop's
+// output routing decision. Internal readLoop detection already holds this lock
+// and therefore calls baseSession.SetZmodemMode directly.
+func (s *SSHSession) SetZmodemMode(v bool) {
+	s.outputRouteMu.Lock()
+	s.baseSession.SetZmodemMode(v)
+	s.outputRouteMu.Unlock()
+}
+
+// EndZmodem leaves binary mode and runs bytes following the final ZMODEM
+// handshake through the same streaming decoder as ordinary SSH output.
+func (s *SSHSession) EndZmodem(trailing []byte) {
+	s.outputRouteMu.Lock()
+	defer s.outputRouteMu.Unlock()
+	s.mu.Lock()
+	s.setZmodemModeLocked(false)
+	decoded := append([]byte(nil), s.decodeOutputLocked(trailing)...)
+	w := s.outputLogWriter
+	cb := s.onDataCallback
+	s.mu.Unlock()
+	if w != nil && len(decoded) > 0 {
+		w(decoded)
+	}
+	if cb != nil && len(decoded) > 0 {
+		cb(decoded)
+	}
 }
 
 // encodeInput converts user keystrokes (UTF-8) to the configured encoding

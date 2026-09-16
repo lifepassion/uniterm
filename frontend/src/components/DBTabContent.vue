@@ -41,10 +41,10 @@
                   @dragend="clearDragState"
                   @drop.prevent="onDocDrop($event, index)"
                 >
-                  <Table2 v-if="doc.kind === 'table' && !doc.isView" :size="12" class="doc-tab-icon" />
-                  <Eye v-else-if="doc.kind === 'table'" :size="12" class="doc-tab-icon" />
-                  <Database v-else-if="doc.kind === 'db-objects'" :size="12" class="doc-tab-icon" />
-                  <Code2 v-else :size="12" class="doc-tab-icon" />
+                  <Table2 v-if="doc.kind === 'table' && !doc.isView" :size="'0.75rem'" class="doc-tab-icon" />
+                  <Eye v-else-if="doc.kind === 'table'" :size="'0.75rem'" class="doc-tab-icon" />
+                  <Database v-else-if="doc.kind === 'db-objects'" :size="'0.75rem'" class="doc-tab-icon" />
+                  <Code2 v-else :size="'0.75rem'" class="doc-tab-icon" />
                   <span class="doc-tab-title" :title="docTitle(doc)">{{ docTitle(doc) }}</span>
                   <span class="doc-tab-close" @click.stop="closeDoc(doc.id)">×</span>
                 </button>
@@ -57,7 +57,7 @@
               :title="t('tab.more')"
               @click.stop="docMoreMenuRef?.toggle($event.currentTarget)"
             >
-              <MoreHorizontal :size="14" />
+              <MoreHorizontal :size="'0.875rem'" />
             </button>
             <Menu ref="docMoreMenuRef" v-model:visible="docMoreMenuVisible" align="end">
               <MenuItem
@@ -237,7 +237,6 @@ const activeTable = computed(() => (activeDoc.value?.kind === 'table' ? activeDo
 const leftWidth = ref(220)
 let resizeStartX = 0
 let resizeStartWidth = 0
-let resizing = false
 
 function nextId(prefix: string) {
   docSeq += 1
@@ -560,7 +559,6 @@ function onObjectRemoved(payload: { dbName: string; tableName?: string; kind: 't
 function onResizeStart(e: MouseEvent) {
   resizeStartX = e.clientX
   resizeStartWidth = leftWidth.value
-  resizing = true
   document.addEventListener('mousemove', onResizeMove)
   document.addEventListener('mouseup', onResizeEnd)
 }
@@ -571,7 +569,6 @@ function onResizeMove(e: MouseEvent) {
 }
 
 function onResizeEnd() {
-  resizing = false
   document.removeEventListener('mousemove', onResizeMove)
   document.removeEventListener('mouseup', onResizeEnd)
 }
@@ -595,7 +592,7 @@ function onResizeEnd() {
   overflow: hidden;
 }
 .db-resizer {
-  width: 4px;
+  width: 0.25rem;
   cursor: col-resize;
   background: transparent;
   flex-shrink: 0;
@@ -617,7 +614,7 @@ function onResizeEnd() {
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-elevated);
   flex-shrink: 0;
-  min-height: 32px;
+  min-height: 2rem;
 }
 .doc-tabs-scroll {
   display: flex;
@@ -628,16 +625,16 @@ function onResizeEnd() {
 .doc-tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  max-width: 180px;
-  padding: 6px 8px 6px 12px;
+  gap: 0.375rem;
+  max-width: 11.25rem;
+  padding: 0.375rem 0.5rem 0.375rem 0.75rem;
   border: none;
   border-right: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   flex-shrink: 0;
 }
 .doc-tab:hover {
@@ -647,7 +644,7 @@ function onResizeEnd() {
 .doc-tab.active {
   background: var(--bg-base);
   color: var(--text-primary);
-  box-shadow: inset 0 -2px 0 var(--accent);
+  box-shadow: inset 0 -0.125rem 0 var(--accent);
 }
 .doc-tab-icon {
   flex-shrink: 0;
@@ -659,11 +656,11 @@ function onResizeEnd() {
   white-space: nowrap;
 }
 .doc-tab-close {
-  width: 16px;
-  height: 16px;
-  line-height: 14px;
-  border-radius: 3px;
-  font-size: 14px;
+  width: 1rem;
+  height: 1rem;
+  line-height: 0.875rem;
+  border-radius: 0.1875rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
   flex-shrink: 0;
 }
@@ -672,17 +669,17 @@ function onResizeEnd() {
   color: var(--text-primary);
 }
 .doc-tab-indicator {
-  width: 2px;
-  min-width: 2px;
+  width: 0.125rem;
+  min-width: 0.125rem;
   align-self: stretch;
   background: var(--accent);
   opacity: 0.8;
-  margin: 4px 0;
+  margin: 0.25rem 0;
   border-radius: 1px;
   flex-shrink: 0;
 }
 .doc-tab-more {
-  width: 28px;
+  width: 1.75rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -698,13 +695,13 @@ function onResizeEnd() {
   color: var(--text-primary);
 }
 .doc-tab-new {
-  width: 32px;
+  width: 2rem;
   border: none;
   border-left: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 16px;
+  font-size: 1rem;
   flex-shrink: 0;
 }
 .doc-tab-new:hover {
@@ -722,32 +719,32 @@ function onResizeEnd() {
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--border-subtle);
-  padding: 0 8px;
+  padding: 0 0.5rem;
   flex-shrink: 0;
-  min-height: 32px;
+  min-height: 2rem;
 }
 .db-subtabs-actions {
   justify-content: space-between;
 }
 .db-subtabs-label {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
-  padding: 0 8px;
+  padding: 0 0.5rem;
 }
 .db-subtabs-right {
   display: flex;
-  gap: 4px;
+  gap: 0.25rem;
 }
 .db-tab {
-  padding: 6px 16px;
+  padding: 0.375rem 1rem;
   border: none;
   background: none;
   color: var(--text-secondary);
   cursor: pointer;
   font-family: var(--font-ui);
-  font-size: 13px;
-  border-bottom: 2px solid transparent;
+  font-size: 0.8125rem;
+  border-bottom: 0.125rem solid transparent;
   transition: all 0.15s ease;
 }
 .db-tab:hover {
@@ -772,6 +769,6 @@ function onResizeEnd() {
   justify-content: center;
   color: var(--text-secondary);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 </style>

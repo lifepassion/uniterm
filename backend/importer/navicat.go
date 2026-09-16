@@ -26,21 +26,16 @@ var (
 	navicatNcxIV  = []byte("libcciv libcciv ")
 )
 
-// navicatConnType maps NCX ConnType values onto uniterm dbType keys.
-var navicatConnType = map[string]string{
-	"MYSQL":  "mysql",
-	"MARIADB": "mysql",
-	"POSTGRESQL": "postgres",
-	"MSSQL":      "sqlserver",
-	"ORACLE":     "oracle",
-	"MONGODB":    "mongodb",
-	"REDIS":      "redis",
-}
-
-// navicatDefaultPort per uniterm dbType for entries missing Port.
-var navicatDefaultPort = map[string]int{
-	"mysql": 3306, "postgres": 5432, "sqlserver": 1433, "oracle": 1521,
-	"mongodb": 27017, "redis": 6379,
+// navicatConnType maps NCX ConnType values directly onto uniterm database
+// targets (config type + dbType + default port).
+var navicatConnType = map[string]connTarget{
+	"MYSQL":      {Type: "database", DBType: "mysql", Port: 3306},
+	"MARIADB":    {Type: "database", DBType: "mysql", Port: 3306},
+	"POSTGRESQL": {Type: "database", DBType: "postgres", Port: 5432},
+	"MSSQL":      {Type: "database", DBType: "sqlserver", Port: 1433},
+	"ORACLE":     {Type: "database", DBType: "oracle", Port: 1521},
+	"MONGODB":    {Type: "mongodb", Port: 27017},
+	"REDIS":      {Type: "redis", Port: 6379},
 }
 
 // navicatConn is one <Connection .../> element of an .ncx export. The format
@@ -83,7 +78,7 @@ func parseNavicat(srcPath string, _ ParseOptions) (*ImportResult, error) {
 	newGroup := func() string { return newGroupID() }
 
 	for _, c := range root.Conns {
-		dbType, ok := navicatConnType[strings.ToUpper(strings.TrimSpace(c.ConnType))]
+		tgt, ok := navicatConnType[strings.ToUpper(strings.TrimSpace(c.ConnType))]
 		if !ok {
 			if c.ConnType != "" {
 				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: unsupported connection type %q, skipped", c.ConnectionName, c.ConnType))
@@ -93,9 +88,9 @@ func parseNavicat(srcPath string, _ ParseOptions) (*ImportResult, error) {
 		conn := session.ConnectionConfig{
 			ID:       newConnectionID(),
 			Name:     firstNonEmpty(c.ConnectionName, c.Host),
-			Type:     "database",
+			Type:     tgt.Type,
+			DBType:   tgt.DBType,
 			Host:     c.Host,
-			DBType:   dbType,
 			DBName:   c.Database,
 			User:     c.UserName,
 			AuthType: "password",
@@ -103,7 +98,7 @@ func parseNavicat(srcPath string, _ ParseOptions) (*ImportResult, error) {
 		if p, err := strconv.Atoi(strings.TrimSpace(c.Port)); err == nil && p > 0 {
 			conn.Port = p
 		} else {
-			conn.Port = navicatDefaultPort[dbType]
+			conn.Port = tgt.Port
 		}
 		if c.Password != "" {
 			pwd, err := navicatDecryptPassword(c.Password)

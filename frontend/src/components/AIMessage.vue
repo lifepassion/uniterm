@@ -2,14 +2,14 @@
   <div class="ai-message" :class="[message.role, { interrupted: isInterrupted || isTimeout }]">
     <!-- Skill card: 仅显示用了哪个 skill，正文已隐藏进 _contextHeader -->
     <div v-if="message.skillName" class="skill-card">
-      <BookOpen :size="13" class="skill-card-icon" />
+      <BookOpen :size="'0.8125rem'" class="skill-card-icon" />
       <span class="skill-card-name">{{ message.skillName }}</span>
       <span class="skill-card-src">{{ message.skillSource === 'auto' ? t('ai.skillAuto') : t('ai.skillExplicit') }}</span>
     </div>
 
     <!-- Command card: 显示命令名 + 参数，正文已展开进 user 消息 -->
     <div v-if="message.commandName" class="skill-card">
-      <Terminal :size="13" class="skill-card-icon" />
+      <Terminal :size="'0.8125rem'" class="skill-card-icon" />
       <span class="skill-card-name">{{ message.commandName }}</span>
       <span v-if="message.commandArgs" class="skill-card-src">{{ message.commandArgs }}</span>
     </div>
@@ -19,7 +19,7 @@
 
       <div v-if="message.role === 'assistant' && message.content?.trim()" class="copy-action">
         <button class="copy-md-btn" @click="copyAsMarkdown" :title="t('ai.copyMarkdown')">
-          <el-icon><Copy :size="14" /></el-icon>
+          <el-icon><Copy :size="'0.875rem'" /></el-icon>
           <span class="copy-md-label">{{ copyMdLabel }}</span>
         </button>
       </div>
@@ -39,7 +39,7 @@
               <span class="tool-box-label">{{ t('ai.in') }}</span>
               <span class="tool-box-name">{{ formatToolName(tc) }}</span>
               <span class="tool-box-count"></span>
-              <button class="tool-copy-btn" @click.stop="copyToolText(formatToolBody(tc), tc.id + '-in')" :title="t('ai.copy')"><el-icon><Check v-if="copiedTool === tc.id + '-in'" :size="14" /><Copy v-else :size="14" /></el-icon></button>
+              <button class="tool-copy-btn" @click.stop="copyToolText(formatToolBody(tc), tc.id + '-in')" :title="t('ai.copy')"><el-icon><Check v-if="copiedTool === tc.id + '-in'" :size="'0.875rem'" /><Copy v-else :size="'0.875rem'" /></el-icon></button>
               <span class="toggle-icon">{{ inExpanded ? '▼' : '▶' }}</span>
             </div>
             <div v-show="inExpanded" class="tool-box-body">
@@ -52,7 +52,7 @@
             <div class="tool-box-header" @click="outExpanded = !outExpanded">
               <span class="tool-box-label">{{ t('ai.out') }}</span>
               <span class="tool-box-count"></span>
-              <button class="tool-copy-btn" @click.stop="copyToolText(getToolResult(tc.id)?.content || '', tc.id + '-out')" :title="t('ai.copy')"><el-icon><Check v-if="copiedTool === tc.id + '-out'" :size="14" /><Copy v-else :size="14" /></el-icon></button>
+              <button class="tool-copy-btn" @click.stop="copyToolText(getToolResult(tc.id)?.content || '', tc.id + '-out')" :title="t('ai.copy')"><el-icon><Check v-if="copiedTool === tc.id + '-out'" :size="'0.875rem'" /><Copy v-else :size="'0.875rem'" /></el-icon></button>
               <span class="toggle-icon">{{ outExpanded ? '▼' : '▶' }}</span>
             </div>
             <div v-show="outExpanded" class="tool-box-body">
@@ -88,7 +88,7 @@
             @click="toggleOption(i, !pendingQ.multiSelect)"
           >
             <span v-if="pendingQ.multiSelect" class="option-check">
-              <el-icon v-if="selectedOptions.includes(i)"><Check :size="14" /></el-icon>
+              <el-icon v-if="selectedOptions.includes(i)"><Check :size="'0.875rem'" /></el-icon>
               <span v-else class="option-check-empty"></span>
             </span>
             <span v-else class="option-radio" :class="{ on: selectedOptions.includes(i) }"></span>
@@ -103,7 +103,7 @@
             @click="toggleOther"
           >
             <span v-if="pendingQ.multiSelect" class="option-check">
-              <el-icon v-if="otherSelected"><Check :size="14" /></el-icon>
+              <el-icon v-if="otherSelected"><Check :size="'0.875rem'" /></el-icon>
               <span v-else class="option-check-empty"></span>
             </span>
             <span v-else class="option-radio" :class="{ on: otherSelected }"></span>
@@ -134,6 +134,7 @@ import { ref, computed } from 'vue'
 import { Copy, Check, BookOpen, Terminal } from '@lucide/vue'
 import { useAIStore } from '../stores/aiStore'
 import { useI18n } from '../i18n'
+import { sanitizeRenderedHtml, escapeHtml as escapeHtmlBase } from '../utils/markdown'
 import type { AIMessage } from '../types/ai'
 
 const props = defineProps<{ message: AIMessage; searchText?: string }>()
@@ -234,8 +235,8 @@ const inExpanded = ref(true)
 const outExpanded = ref(false)
 const copyMdLabel = ref(t('ai.copyMarkdown'))
 
-const COPY_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>'
-const CHECK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+const COPY_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="0.75rem" height="0.75rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>'
+const CHECK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="0.75rem" height="0.75rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>'
 
 async function copyAsMarkdown() {
   try {
@@ -342,10 +343,11 @@ function getToolResult(toolCallId: string): AIMessage | undefined {
 }
 
 function renderMarkdown(text: string): string {
-  let html = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+  // escapeHtmlBase escapes & < > and quotes — the quote escape matters here:
+  // without it a markdown link like [x](x"/onerror="alert(1)) breaks out of
+  // href="..." via the slash attribute separator, and sanitizeRenderedHtml
+  // only strips on*= handlers preceded by whitespace (FE-01 follow-up).
+  let html = escapeHtmlBase(text)
 
   // Protect fenced code blocks and inline code from further markdown processing
   const protectedBlocks: string[] = []
@@ -418,8 +420,8 @@ function renderMarkdown(text: string): string {
   html = html.replace(/(?:^ {0,4}\d+\. .*(?:\n|$))+/gm, (block) => buildNestedList(block, true))
 
   // Task list checkboxes (Lucide-style SVGs)
-  const TASK_CHECKED = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="m9 12 2 2 4-4"></path></svg>'
-  const TASK_UNCHECKED = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>'
+  const TASK_CHECKED = '<svg xmlns="http://www.w3.org/2000/svg" width="0.875rem" height="0.875rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="m9 12 2 2 4-4"></path></svg>'
+  const TASK_UNCHECKED = '<svg xmlns="http://www.w3.org/2000/svg" width="0.875rem" height="0.875rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>'
   html = html.replace(/(<li>)\[x\] /gi, '$1<span class="task-check checked">' + TASK_CHECKED + '</span>')
   html = html.replace(/(<li>)\[ \] /gi, '$1<span class="task-check">' + TASK_UNCHECKED + '</span>')
 
@@ -571,6 +573,7 @@ function buildNestedBlockquote(block: string): string {
 }
 
 function highlightText(html: string, query: string): string {
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const regex = new RegExp(escaped, 'gi')
   // Split on < to isolate text from HTML tags.
   // Even-indexed segments (after join) are outside tags; odd are inside.
@@ -632,37 +635,11 @@ const renderedContent = computed(() => {
 })
 
 function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\n/g, '<br>')
+  return escapeHtmlBase(text).replace(/\n/g, '<br>')
 }
 
-// Sanitize markdown-produced HTML before it's assigned to v-html.
-// Conservative strip-list: anything outside this allowlist is removed.
-// Addresses FE-01 (XSS via model output).
-function sanitizeRenderedHtml(html: string): string {
-  // Drop dangerous tags entirely (including their content).
-  const dangerousTags = [
-    'script', 'iframe', 'object', 'embed', 'style', 'form',
-    'link', 'meta', 'base', 'svg', 'math',
-  ]
-  for (const tag of dangerousTags) {
-    const re = new RegExp(`<${tag}\\b[\\s\\S]*?<\\/${tag}>`, 'gi')
-    html = html.replace(re, '')
-    const reSelf = new RegExp(`<${tag}\\b[^>]*\\/?>`, 'gi')
-    html = html.replace(reSelf, '')
-  }
-  // Strip on*="..." event-handler attributes (any attribute starting with on).
-  html = html.replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-  // Strip javascript:/data:/vbscript: URL schemes in href/src.
-  html = html.replace(
-    /\s+(href|src|action|formaction|xlink:href)\s*=\s*("\s*(?:javascript|data|vbscript):[^"]*"|'\s*(?:javascript|data|vbscript):[^']*'|(?:javascript|data|vbscript):[^\s>]+)/gi,
-    '',
-  )
-  return html
-}
+// sanitizeRenderedHtml lives in utils/markdown.ts so other v-html surfaces
+// (e.g. the update changelog) share the same allowlist.
 </script>
 
 <style scoped>
@@ -670,17 +647,17 @@ function sanitizeRenderedHtml(html: string): string {
 :deep(mark.ai-search-highlight) {
   background: rgba(250, 204, 21, 0.4);
   color: inherit;
-  border-radius: 2px;
+  border-radius: 0.125rem;
 }
 :deep(mark.ai-search-highlight.active) {
   background: rgba(250, 204, 21, 0.6);
   color: inherit;
-  outline: 2px solid var(--warning);
-  border-radius: 2px;
+  outline: 0.125rem solid var(--warning);
+  border-radius: 0.125rem;
 }
 .ai-message {
   display: flex;
-  padding: 14px 18px;
+  padding: 0.875rem 1.125rem;
 }
 .ai-message.user .content {
   display: flex;
@@ -688,7 +665,7 @@ function sanitizeRenderedHtml(html: string): string {
 }
 .ai-message.user .text {
   background: var(--bg-surface);
-  padding: 10px 16px;
+  padding: 0.625rem 1rem;
   border-radius: var(--radius-md);
   box-shadow: inset 0 0 0 1px var(--border-subtle);
 }
@@ -707,7 +684,7 @@ function sanitizeRenderedHtml(html: string): string {
   min-width: 0;
 }
 .text {
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.6;
   color: var(--text-primary);
   white-space: pre-wrap;
@@ -717,7 +694,7 @@ function sanitizeRenderedHtml(html: string): string {
   -webkit-user-select: text;
 }
 .text :deep(.code-block-wrapper) {
-  margin: 6px 0;
+  margin: 0.375rem 0;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   overflow: hidden;
@@ -726,12 +703,12 @@ function sanitizeRenderedHtml(html: string): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 3px 8px;
+  padding: 0.1875rem 0.5rem;
   background: var(--bg-overlay);
   border-bottom: 1px solid var(--border-subtle);
 }
 .text :deep(.code-lang-tag) {
-  font-size: 10px;
+  font-size: 0.625rem;
   font-family: var(--font-ui);
   color: var(--text-muted);
 }
@@ -748,42 +725,42 @@ function sanitizeRenderedHtml(html: string): string {
 }
 .text :deep(pre) {
   background: var(--bg-base);
-  padding: 10px 12px;
+  padding: 0.625rem 0.75rem;
   border-radius: var(--radius-sm);
   overflow-x: auto;
-  margin: 6px 0;
+  margin: 0.375rem 0;
   border: 1px solid var(--border-subtle);
 }
 .text :deep(code) {
   background: var(--bg-base);
-  padding: 2px 5px;
+  padding: 0.125rem 0.3125rem;
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--accent);
 }
 
 /* Headings */
-.text :deep(h1) { font-size: 16px; margin: 8px 0 4px; }
-.text :deep(h2) { font-size: 15px; margin: 8px 0 4px; }
-.text :deep(h3) { font-size: 14px; margin: 6px 0 4px; }
-.text :deep(h4) { font-size: 13px; margin: 6px 0 4px; }
-.text :deep(h5) { font-size: 12px; margin: 4px 0 2px; }
-.text :deep(h6) { font-size: 12px; margin: 4px 0 2px; color: var(--text-muted); }
+.text :deep(h1) { font-size: 1rem; margin: 0.5rem 0 0.25rem; }
+.text :deep(h2) { font-size: 0.875rem; margin: 0.5rem 0 0.25rem; }
+.text :deep(h3) { font-size: 0.875rem; margin: 0.375rem 0 0.25rem; }
+.text :deep(h4) { font-size: 0.8125rem; margin: 0.375rem 0 0.25rem; }
+.text :deep(h5) { font-size: 0.75rem; margin: 0.25rem 0 0.125rem; }
+.text :deep(h6) { font-size: 0.75rem; margin: 0.25rem 0 0.125rem; color: var(--text-muted); }
 
 /* Lists */
 .text :deep(ul),
 .text :deep(ol) {
   padding-left: 0;
-  margin: 4px 0;
+  margin: 0.25rem 0;
   list-style-position: inside;
 }
 .text :deep(li) {
-  margin: 2px 0;
+  margin: 0.125rem 0;
 }
 .text :deep(li ul),
 .text :deep(li ol) {
-  padding-left: 12px;
+  padding-left: 0.75rem;
 }
 .text :deep(ol ol) { list-style-type: lower-alpha; }
 .text :deep(ol ol ol) { list-style-type: lower-roman; }
@@ -792,7 +769,7 @@ function sanitizeRenderedHtml(html: string): string {
 .text :deep(.task-check) {
   display: inline-flex;
   vertical-align: middle;
-  margin-right: 4px;
+  margin-right: 0.25rem;
   color: var(--text-muted);
 }
 .text :deep(.task-check.checked) {
@@ -801,7 +778,7 @@ function sanitizeRenderedHtml(html: string): string {
 
 /* Links */
 .text :deep(p) {
-  margin: 5px 0;
+  margin: 0.3125rem 0;
 }
 .text :deep(a) {
   color: var(--info);
@@ -818,9 +795,9 @@ function sanitizeRenderedHtml(html: string): string {
 
 /* Blockquote */
 .text :deep(blockquote) {
-  margin: 8px 0;
-  padding: 6px 8px 6px 12px;
-  border-left: 3px solid var(--accent);
+  margin: 0.5rem 0;
+  padding: 0.375rem 0.5rem 0.375rem 0.75rem;
+  border-left: 0.1875rem solid var(--accent);
   background: var(--bg-overlay);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   color: var(--text-secondary);
@@ -828,7 +805,7 @@ function sanitizeRenderedHtml(html: string): string {
 
 /* Horizontal rule */
 .text :deep(hr) {
-  margin: 14px 0;
+  margin: 0.875rem 0;
   border: none;
   border-top: 1px solid var(--border-hover);
 }
@@ -836,13 +813,13 @@ function sanitizeRenderedHtml(html: string): string {
 /* Tables */
 .text :deep(table) {
   border-collapse: collapse;
-  margin: 4px 0;
-  font-size: 12px;
+  margin: 0.25rem 0;
+  font-size: 0.75rem;
 }
 .text :deep(th),
 .text :deep(td) {
   border: 1px solid var(--border-hover);
-  padding: 4px 8px;
+  padding: 0.25rem 0.5rem;
   text-align: left;
 }
 .text :deep(th) {
@@ -852,24 +829,24 @@ function sanitizeRenderedHtml(html: string): string {
 
 /* Tool boxes */
 .tool-box {
-  margin-top: 6px;
+  margin-top: 0.375rem;
   border-radius: var(--radius-sm);
   overflow: hidden;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .tool-box-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
   cursor: pointer;
   user-select: none;
 }
 .tool-box-label {
   font-weight: bold;
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 3px;
+  font-size: 0.625rem;
+  padding: 1px 0.3125rem;
+  border-radius: 0.1875rem;
   text-transform: uppercase;
 }
 .tool-box-count {
@@ -878,15 +855,15 @@ function sanitizeRenderedHtml(html: string): string {
 }
 .toggle-icon {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 0.625rem;
   cursor: pointer;
 }
 .tool-copy-btn {
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 11px;
-  padding: 0 2px;
+  font-size: 0.6875rem;
+  padding: 0 0.125rem;
   opacity: 0;
   transition: opacity 0.15s;
   color: var(--text-muted);
@@ -902,7 +879,7 @@ function sanitizeRenderedHtml(html: string): string {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0 2px;
+  padding: 0 0.125rem;
   opacity: 0.4;
   transition: opacity 0.15s;
   color: var(--text-muted);
@@ -913,7 +890,7 @@ function sanitizeRenderedHtml(html: string): string {
   opacity: 1 !important;
 }
 .tool-box-body {
-  padding: 6px 8px;
+  padding: 0.375rem 0.5rem;
 }
 
 /* IN box - success themed */
@@ -930,19 +907,19 @@ function sanitizeRenderedHtml(html: string): string {
 }
 .tool-box-name {
   flex: 1;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .tool-detail {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   line-height: 1.6;
 }
 .tool-call-item {
-  margin-bottom: 6px;
+  margin-bottom: 0.375rem;
 }
 .tool-call-item:last-child {
   margin-bottom: 0;
@@ -950,16 +927,16 @@ function sanitizeRenderedHtml(html: string): string {
 .tool-call-name {
   font-weight: bold;
   color: var(--success);
-  margin-bottom: 2px;
+  margin-bottom: 0.125rem;
 }
 .tool-call-args {
   margin: 0;
-  padding: 4px 6px;
+  padding: 0.25rem 0.375rem;
   background: var(--bg-base);
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -979,25 +956,25 @@ function sanitizeRenderedHtml(html: string): string {
 .tool-pairs {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 0.375rem;
+  margin-top: 0.375rem;
 }
 .tool-pair {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0.25rem;
 }
 .tool-output {
   margin: 0;
-  padding: 4px 6px;
+  padding: 0.25rem 0.375rem;
   background: var(--bg-base);
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 300px;
+  max-height: 18.75rem;
   overflow-y: auto;
 }
 
@@ -1005,32 +982,32 @@ function sanitizeRenderedHtml(html: string): string {
 .pending-tools {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 .pending-tool.dangerous {
   border-color: var(--error);
   background: var(--error-subtle);
 }
 .danger-badge {
-  margin-left: 8px;
-  font-size: 10px;
+  margin-left: 0.5rem;
+  font-size: 0.625rem;
   font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 3px;
+  padding: 1px 0.375rem;
+  border-radius: 0.1875rem;
   background: var(--error);
   color: var(--on-accent);
   text-transform: uppercase;
 }
 .pending-tool {
-  margin-top: 8px;
-  padding: 8px;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-hover);
   border-radius: var(--radius-sm);
 }
 .tool-name {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   text-transform: uppercase;
 }
@@ -1040,26 +1017,26 @@ function sanitizeRenderedHtml(html: string): string {
 }
 .tool-args {
   display: block;
-  margin: 4px 0;
-  font-size: 12px;
+  margin: 0.25rem 0;
+  font-size: 0.75rem;
   color: var(--text-primary);
   white-space: pre-wrap;
 }
 .tool-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 
 .copy-action {
-  margin-top: 4px;
+  margin-top: 0.25rem;
 }
 .copy-md-btn {
   display: inline-flex;
   align-items: center;
   gap: 0;
-  padding: 2px 4px;
-  font-size: 11px;
+  padding: 0.125rem 0.25rem;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   background: transparent;
   border: 1px solid var(--border-subtle);
@@ -1076,53 +1053,53 @@ function sanitizeRenderedHtml(html: string): string {
   transition: max-width 0.2s, opacity 0.15s, padding-left 0.2s;
 }
 .copy-md-btn:hover {
-  gap: 4px;
-  padding: 2px 8px;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
   color: var(--accent);
   border-color: var(--accent-glow);
   background: var(--accent-subtle);
 }
 .copy-md-btn:hover .copy-md-label {
-  max-width: 150px;
+  max-width: 9.375rem;
   opacity: 1;
-  padding-left: 2px;
+  padding-left: 0.125rem;
 }
 .continue-box {
-  margin-top: 8px;
+  margin-top: 0.5rem;
 }
 
 /* Question box (ask_user) */
 .question-box {
-  margin-top: 8px;
-  padding: 10px;
+  margin-top: 0.5rem;
+  padding: 0.625rem;
   background: var(--bg-surface);
   border: 1px solid var(--accent-glow);
   border-radius: var(--radius-sm);
 }
 .question-header {
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 600;
   text-transform: uppercase;
   color: var(--accent);
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
 }
 .question-text {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-primary);
-  margin-bottom: 8px;
+  margin-bottom: 0.5rem;
   line-height: 1.5;
 }
 .question-options {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 8px;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
 }
 .question-option {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -1138,26 +1115,26 @@ function sanitizeRenderedHtml(html: string): string {
   background: var(--accent-subtle);
 }
 .option-radio {
-  width: 14px;
-  height: 14px;
+  width: 0.875rem;
+  height: 0.875rem;
   border-radius: 50%;
-  border: 2px solid var(--border-hover);
+  border: 0.125rem solid var(--border-hover);
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: 0.125rem;
   transition: border-color 0.15s, background 0.15s;
 }
 .option-radio.on {
   border-color: var(--accent);
   background: var(--accent);
-  box-shadow: inset 0 0 0 2px var(--bg-surface);
+  box-shadow: inset 0 0 0 0.125rem var(--bg-surface);
 }
 .option-check {
-  width: 16px;
-  height: 16px;
+  width: 1rem;
+  height: 1rem;
   border: 1px solid var(--border-hover);
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: 0.125rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1177,51 +1154,51 @@ function sanitizeRenderedHtml(html: string): string {
 .option-body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
   min-width: 0;
 }
 .option-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-primary);
 }
 .option-desc {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   line-height: 1.4;
 }
 .other-input {
   width: 100%;
-  padding: 3px 6px;
-  font-size: 11px;
+  padding: 0.1875rem 0.375rem;
+  font-size: 0.6875rem;
   font-family: var(--font-ui);
   color: var(--text-primary);
   background: var(--bg-base);
   border: 1px solid var(--border-hover);
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   outline: none;
-  margin-top: 4px;
+  margin-top: 0.25rem;
 }
 .other-input:focus {
   border-color: var(--accent);
 }
 .question-actions {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .skill-card {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
   background: var(--accent-subtle, rgba(64,158,255,0.1));
   border: 1px solid var(--accent-glow, rgba(64,158,255,0.3));
-  border-radius: 12px;
-  font-size: 12px;
-  margin: 2px 0;
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  margin: 0.125rem 0;
 }
 .skill-card-icon {
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .skill-card-name {
   color: var(--accent, #409eff);
@@ -1230,6 +1207,6 @@ function sanitizeRenderedHtml(html: string): string {
 }
 .skill-card-src {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 </style>

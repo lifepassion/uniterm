@@ -50,7 +50,7 @@
         </div>
 
         <div class="expand-toggle" @click="showCores = !showCores">
-          <ChevronRight :size="12" class="chev" :class="{ open: showCores }" />
+          <ChevronRight :size="'0.75rem'" class="chev" :class="{ open: showCores }" />
           <span>{{ t('monitor.allCores') }} ({{ cpus.length }})</span>
         </div>
         <div v-if="showCores" class="detail-list">
@@ -94,7 +94,7 @@
         </div>
 
         <div class="expand-toggle" @click="showNets = !showNets">
-          <ChevronRight :size="12" class="chev" :class="{ open: showNets }" />
+          <ChevronRight :size="'0.75rem'" class="chev" :class="{ open: showNets }" />
           <span>{{ t('monitor.allNetworks') }} ({{ nets.length }})</span>
         </div>
         <div v-if="showNets" class="detail-list">
@@ -117,7 +117,7 @@
         </div>
 
         <div class="expand-toggle" @click="toggleDisks">
-          <ChevronRight :size="12" class="chev" :class="{ open: showDisks }" />
+          <ChevronRight :size="'0.75rem'" class="chev" :class="{ open: showDisks }" />
           <span>{{ t('monitor.allDisks') }} ({{ mountedDisks.length }})</span>
         </div>
         <div v-if="showDisks" class="detail-list">
@@ -148,7 +148,7 @@
 
       <!-- Open full monitor (pinned at the bottom) -->
       <button class="full-monitor-btn" @click="openFullMonitor">
-        <ExternalLink :size="14" />
+        <ExternalLink :size="'0.875rem'" />
         <span>{{ t('companion.openFullMonitor') }}</span>
       </button>
     </div>
@@ -529,8 +529,8 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  font-size: 12px;
-  padding: 16px;
+  font-size: 0.75rem;
+  padding: 1rem;
   text-align: center;
 }
 .monitor-body {
@@ -538,8 +538,8 @@ onUnmounted(() => {
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 10px;
+  gap: 0.625rem;
+  padding: 0.625rem;
   min-height: 0;
 }
 
@@ -548,17 +548,17 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 0.5rem;
   width: 100%;
   flex-shrink: 0;
-  padding: 10px;
+  padding: 0.625rem;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-secondary);
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+  border-radius: 0.625rem;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -572,27 +572,27 @@ onUnmounted(() => {
 
 .card {
   background: var(--bg-surface);
-  border-radius: 10px;
-  padding: 12px;
+  border-radius: 0.625rem;
+  padding: 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0.625rem;
 }
 
 .sys-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap: 0.5rem;
   min-width: 0;
 }
 .sys-label {
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-muted);
   flex-shrink: 0;
 }
 .sys-value {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -601,11 +601,11 @@ onUnmounted(() => {
   text-align: right;
 }
 
-.mem-row { display: flex; flex-direction: column; gap: 4px; }
+.mem-row { display: flex; flex-direction: column; gap: 0.25rem; }
 .mem-head {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
 }
 .mem-val {
@@ -614,14 +614,14 @@ onUnmounted(() => {
 }
 .mem-val.cpu { color: var(--chart-1, #60a5fa); font-weight: 600; }
 .mem-bar {
-  height: 8px;
-  border-radius: 999px;
+  height: 0.5rem;
+  border-radius: 62.4375rem;
   background: var(--bg-hover);
   overflow: hidden;
 }
 .mem-fill {
   height: 100%;
-  border-radius: 999px;
+  border-radius: 62.4375rem;
   transition: width 0.35s ease;
 }
 .mem-fill.cpu { background: linear-gradient(90deg, #6366f1, #818cf8); }
@@ -631,34 +631,34 @@ onUnmounted(() => {
 .load-row {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 0.375rem;
   flex-wrap: wrap;
 }
 .load-label {
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-muted);
 }
 .load-val {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
-  margin-right: 4px;
+  margin-right: 0.25rem;
 }
 
 .net-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .net-stat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
 }
-.net-label { font-size: 10px; color: var(--text-muted); }
+.net-label { font-size: 0.625rem; color: var(--text-muted); }
 .net-num {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -670,12 +670,12 @@ onUnmounted(() => {
 .expand-toggle {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: var(--text-muted);
-  padding: 2px 0;
+  padding: 0.125rem 0;
   user-select: none;
 }
 .expand-toggle:hover { color: var(--text-secondary); }
@@ -685,17 +685,17 @@ onUnmounted(() => {
 .detail-list {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  max-height: 170px;
+  gap: 0.1875rem;
+  max-height: 10.625rem;
   overflow: auto;
-  padding-top: 6px;
+  padding-top: 0.375rem;
   border-top: 1px solid var(--border-subtle);
 }
 .detail-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11px;
+  gap: 0.375rem;
+  font-size: 0.6875rem;
   min-width: 0;
 }
 .detail-name {
@@ -708,21 +708,21 @@ onUnmounted(() => {
 }
 .detail-bar {
   flex: 1;
-  height: 5px;
-  max-width: 80px;
-  border-radius: 999px;
+  height: 0.3125rem;
+  max-width: 5rem;
+  border-radius: 62.4375rem;
   background: var(--bg-hover);
   overflow: hidden;
 }
 .detail-fill {
   height: 100%;
-  border-radius: 999px;
+  border-radius: 62.4375rem;
   background: linear-gradient(90deg, var(--accent), var(--accent-glow));
 }
 .detail-val {
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
-  min-width: 40px;
+  min-width: 2.5rem;
   text-align: right;
 }
 .detail-sub {
@@ -732,12 +732,12 @@ onUnmounted(() => {
 }
 .detail-sub.tx { color: #f59e0b; }
 .detail-row.net .detail-sub {
-  width: 72px;
+  width: 4.5rem;
   text-align: right;
 }
 .detail-empty {
-  padding: 6px 0;
-  font-size: 11px;
+  padding: 0.375rem 0;
+  font-size: 0.6875rem;
   color: var(--text-muted);
 }
 </style>

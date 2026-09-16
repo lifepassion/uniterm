@@ -1,5 +1,5 @@
 <template>
-  <el-dialog append-to-body v-model="visible" :title="isEdit ? t('theme.editTitle') : t('theme.newTitle')" width="640px" class="theme-editor-dialog">
+  <el-dialog append-to-body v-model="visible" :title="isEdit ? t('theme.editTitle') : t('theme.newTitle')" width="40rem" class="theme-editor-dialog">
     <div class="theme-editor">
       <div class="theme-editor-top">
         <el-input v-model="draft.name" :placeholder="t('theme.namePlaceholder')" class="theme-name-input" />
@@ -8,10 +8,10 @@
           <el-radio-button value="light">{{ t('theme.typeLight') }}</el-radio-button>
         </el-radio-group>
         <button class="btn btn-ghost btn-icon btn-sm" :title="t('theme.importItermcolors')" @click="onImport">
-          <Upload :size="14" />
+          <Upload :size="'0.875rem'" />
         </button>
         <button class="btn btn-ghost btn-icon btn-sm" :title="t('theme.exportItermcolors')" @click="onExport">
-          <Download :size="14" />
+          <Download :size="'0.875rem'" />
         </button>
       </div>
 
@@ -257,15 +257,15 @@ async function onExport() {
 .theme-editor {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 1rem;
   max-height: 60vh;
   overflow-y: auto;
-  padding-right: 4px;
+  padding-right: 0.25rem;
 }
 
 .theme-editor-top {
   display: flex;
-  gap: 12px;
+  gap: 0.75rem;
   align-items: center;
 }
 
@@ -275,9 +275,9 @@ async function onExport() {
 
 .theme-preview {
   border-radius: var(--radius-md);
-  padding: 12px 14px;
+  padding: 0.75rem 0.875rem;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.6;
   box-shadow: inset 0 0 0 1px var(--border-subtle);
 }
@@ -288,51 +288,51 @@ async function onExport() {
 
 .theme-preview-cursor {
   display: inline-block;
-  width: 7px;
-  height: 14px;
+  width: 0.4375rem;
+  height: 0.875rem;
   vertical-align: middle;
 }
 
 .theme-preview-swatches {
   display: flex;
-  gap: 4px;
-  margin-top: 8px;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
 }
 
 .theme-preview-swatch {
-  width: 16px;
-  height: 16px;
+  width: 1rem;
+  height: 1rem;
   border-radius: var(--radius-sm);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
 
 .theme-color-group-title {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 8px;
+  margin-bottom: 0.5rem;
 }
 
 .theme-color-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 8px 16px;
+  gap: 0.5rem 1rem;
 }
 
 .theme-color-field {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .theme-color-label {
   flex: 1;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 
 .theme-color-hex {
-  width: 100px;
+  width: 6.25rem;
   flex-shrink: 0;
 }
 

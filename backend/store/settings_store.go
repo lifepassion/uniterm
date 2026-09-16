@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 
 	"github.com/ys-ll/uniterm/backend/credentials"
@@ -12,8 +13,9 @@ import (
 
 const settingsFileName = "settings.json"
 
-func boolPtr(b bool) *bool { return &b }
-func intPtr(i int) *int    { return &i }
+func boolPtr(b bool) *bool    { return &b }
+func intPtr(i int) *int       { return &i }
+func strPtr(s string) *string { return &s }
 
 type TerminalSettings struct {
 	Theme             string `json:"theme"`
@@ -40,6 +42,12 @@ type TerminalSettings struct {
 	// output logs (issue #227). Empty means: use the OS-appropriate
 	// default under ~/Documents/uniTerm/logs.
 	SessionLogDir string `json:"sessionLogDir,omitempty"`
+	// ZmodemDownloadDir is the device-local default directory for files
+	// received with sz. Empty preserves the directory picker behavior.
+	ZmodemDownloadDir string `json:"zmodemDownloadDir,omitempty"`
+	// SessionLogFilename controls names for new output logs. Supported tokens:
+	// %S session name, %H host, %M month, %D day, %h hour, %m minute.
+	SessionLogFilename string `json:"sessionLogFilename,omitempty"`
 	// WordSeparator overrides xterm.js's double-click word-selection
 	// separators. Empty means the frontend falls back to its built-in
 	// default. Mirrors the `wordSeparator` Terminal option.
@@ -104,14 +112,6 @@ type CustomTerminalTheme struct {
 	Colors TerminalThemeColors `json:"colors"`
 }
 
-// AIConfig is the legacy flat AI config type, kept for Wails binding compatibility.
-// New code should use AppSettings.AI (active model from AISettings).
-type AIConfig struct {
-	APIKey  string `json:"apiKey"`
-	BaseURL string `json:"baseURL"`
-	Model   string `json:"model"`
-}
-
 type AIModelConfig struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
@@ -142,18 +142,34 @@ type KeyBinding struct {
 }
 
 type AppSettings struct {
-	Theme                string                `json:"theme"`
-	Language             string                `json:"language"`
-	Terminal             TerminalSettings      `json:"terminal"`
-	AI                   AISettings            `json:"ai"`
-	Keyboard             map[string]KeyBinding `json:"keyboard"`
-	AutoCheckUpdate      *bool                 `json:"autoCheckUpdate"`
-	CloseTabPrompt       *bool                 `json:"closeTabPrompt"`
-	CloseAppPrompt       *bool                 `json:"closeAppPrompt"`
-	SFTPBookmarks        SFTPBookmarks         `json:"sftpBookmarks"`
-	CustomTerminalThemes []CustomTerminalTheme `json:"customTerminalThemes"`
-	DefaultLocalShell    string                `json:"defaultLocalShell"`
-	TabCloseButton       string                `json:"tabCloseButton"`
+	Theme    string `json:"theme"`
+	Language string `json:"language"`
+	// UiFontSize is the UI design baseline in px (how large "normal" text
+	// renders): the rem root derives from it as uiFontSize/12*16. Pointer +
+	// omitempty so settings.json written by older builds still loads; nil
+	// means "use the platform default" (14 on macOS, 12 elsewhere). Stored
+	// per device on purpose — settings.json is not synced.
+	UiFontSize      *int                  `json:"uiFontSize,omitempty"`
+	Terminal        TerminalSettings      `json:"terminal"`
+	AI              AISettings            `json:"ai"`
+	Keyboard        map[string]KeyBinding `json:"keyboard"`
+	AutoCheckUpdate *bool                 `json:"autoCheckUpdate"`
+	// UpdateSource selects where update checks and downloads come from:
+	// "auto" (default, picks by UI language with fallback), "github" or
+	// "gitee" (domestic mirror). Pointer + omitempty so settings.json written
+	// by older builds still load; nil means "auto".
+	UpdateSource   *string       `json:"updateSource,omitempty"`
+	CloseTabPrompt *bool         `json:"closeTabPrompt"`
+	CloseAppPrompt *bool         `json:"closeAppPrompt"`
+	SFTPBookmarks  SFTPBookmarks `json:"sftpBookmarks"`
+	// SftpTransferPanelVisible remembers whether the SFTP transfer panel was
+	// last left visible. Pointer + omitempty so settings.json written by older
+	// builds (which lack this field) still load; nil means "use the frontend
+	// default" (hidden).
+	SftpTransferPanelVisible *bool                 `json:"sftpTransferPanelVisible,omitempty"`
+	CustomTerminalThemes     []CustomTerminalTheme `json:"customTerminalThemes"`
+	DefaultLocalShell        string                `json:"defaultLocalShell"`
+	TabCloseButton           string                `json:"tabCloseButton"`
 	// SidebarTabs toggles which connection-sidebar tab icons are visible,
 	// keyed by view id (connections/files/monitor/tunnels/quickCommands/
 	// history/personalization). "connections" is always shown in the UI and
@@ -273,6 +289,23 @@ func (s *SettingsStore) Load() (AppSettings, error) {
 		settings.AutoCheckUpdate = boolPtr(true)
 		needsSave = true
 	}
+	// Default updateSource to "auto" if not present
+	if settings.UpdateSource == nil {
+		settings.UpdateSource = strPtr("auto")
+		needsSave = true
+	}
+	// Default maxTurns when missing (older settings.json files predating the
+	// multi-model AI block, or hand-edited files). Pointer + backfill so the
+	// stored copy always carries an explicit value.
+	if settings.AI.MaxTurns == nil {
+		settings.AI.MaxTurns = intPtr(defaultMaxTurns)
+		needsSave = true
+	}
+	if settings.UiFontSize == nil {
+		n := defaultUiFontSize()
+		settings.UiFontSize = &n
+		needsSave = true
+	}
 	if settings.CloseTabPrompt == nil {
 		settings.CloseTabPrompt = boolPtr(true)
 		needsSave = true
@@ -290,9 +323,11 @@ func (s *SettingsStore) Load() (AppSettings, error) {
 }
 
 func defaultSettings() AppSettings {
+	n := defaultUiFontSize()
 	return AppSettings{
-		Theme:    "dark",
-		Language: "system",
+		Theme:      "dark",
+		Language:   "system",
+		UiFontSize: &n,
 		Terminal: TerminalSettings{
 			Theme:            "uniterm-dark",
 			FontFamily:       "Consolas, \"Courier New\", monospace",
@@ -301,22 +336,10 @@ func defaultSettings() AppSettings {
 			RightClickAction: "menu",
 			MaxHistoryLines:  5000,
 		},
-		AI: AISettings{
-			MaxTurns: intPtr(20),
-			Models: []AIModelConfig{
-				{
-					ID:       "model-default",
-					Name:     "Default",
-					APIKey:   "",
-					BaseURL:  "https://api.openai.com/v1",
-					Model:    "gpt-4o",
-					Protocol: "anthropic",
-				},
-			},
-			ActiveModelID: "model-default",
-		},
+		AI:              defaultAISettings(),
 		Keyboard:        defaultKeyboard(),
 		AutoCheckUpdate: boolPtr(true),
+		UpdateSource:    strPtr("auto"),
 		CloseTabPrompt:  boolPtr(true),
 		CloseAppPrompt:  boolPtr(true),
 		SFTPBookmarks: SFTPBookmarks{
@@ -325,6 +348,43 @@ func defaultSettings() AppSettings {
 		},
 		CustomTerminalThemes: []CustomTerminalTheme{},
 	}
+}
+
+// defaultUiFontSize returns the platform UI text baseline in px: macOS
+// native text runs larger (HIG 13pt+) than the Windows 12px design size,
+// and users sit further from laptop Retina screens.
+func defaultUiFontSize() int {
+	if runtime.GOOS == "darwin" {
+		return 14
+	}
+	return 12
+}
+
+const defaultMaxTurns = 20
+
+// defaultAISettings is the seed AI block for a fresh settings.json. Shared
+// with AIConfigStore so the settings and ai.json defaults can never drift.
+func defaultAISettings() AISettings {
+	return AISettings{
+		MaxTurns: intPtr(defaultMaxTurns),
+		Models: []AIModelConfig{
+			{
+				ID:       "model-default",
+				Name:     "Default",
+				APIKey:   "",
+				BaseURL:  "https://api.openai.com/v1",
+				Model:    "gpt-4o",
+				Protocol: "anthropic",
+			},
+		},
+		ActiveModelID: "model-default",
+	}
+}
+
+// defaultAIConfig mirrors defaultAISettings for the standalone ai.json file.
+func defaultAIConfig() AIStoreData {
+	ai := defaultAISettings()
+	return AIStoreData{MaxTurns: ai.MaxTurns, Models: ai.Models}
 }
 
 func defaultKeyboard() map[string]KeyBinding {

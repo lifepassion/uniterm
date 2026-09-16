@@ -2,7 +2,7 @@
   <div class="x11-desktop-tab-content">
     <!-- Connecting state -->
     <div v-if="status === 'connecting'" class="x11-overlay">
-      <el-icon class="is-loading" :size="32"><Loader /></el-icon>
+      <el-icon class="is-loading" :size="'2rem'"><Loader /></el-icon>
       <p>{{ t('x11.tab.connecting') }}</p>
     </div>
 
@@ -194,7 +194,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 0.75rem;
   color: var(--text-muted);
   z-index: 10;
 }
@@ -205,53 +205,53 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 24px;
-  padding: 24px;
+  gap: 1.5rem;
+  padding: 1.5rem;
   z-index: 10;
 }
 .x11-rows {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-width: 560px;
+  gap: 0.5rem;
+  max-width: 35rem;
   width: 100%;
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-md, 6px);
-  padding: 16px 20px;
+  border-radius: var(--radius-md, 0.375rem);
+  padding: 1rem 1.25rem;
   color: var(--text-primary);
 }
 .x11-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
 }
 .x11-row-label {
   color: var(--text-muted);
-  min-width: 120px;
+  min-width: 7.5rem;
 }
 .x11-cmd {
   font-family: var(--font-mono, monospace);
   background: var(--bg-base);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm, 4px);
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--radius-sm, 0.25rem);
   color: var(--text-primary);
   word-break: break-all;
 }
 .x11-hint {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.5;
-  margin-top: 8px;
+  margin-top: 0.5rem;
 }
 .x11-actions {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .x11-status-dot {
-  width: 8px;
-  height: 8px;
+  width: 0.5rem;
+  height: 0.5rem;
   border-radius: 50%;
   background: var(--success);
   flex-shrink: 0;
@@ -259,7 +259,7 @@ onBeforeUnmount(() => {
 .x11-error-text { color: var(--error); }
 .x11-error-detail {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   max-width: 80%;
   text-align: center;
   word-break: break-word;

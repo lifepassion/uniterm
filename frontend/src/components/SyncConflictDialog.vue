@@ -2,7 +2,7 @@
   <el-dialog append-to-body
     v-model="visible"
     :title="t('sync.conflictTitle')"
-    width="480px"
+    width="30rem"
     :close-on-click-modal="false"
     @close="handleCancel"
   >
@@ -83,33 +83,33 @@ function handleCancel() {
 .conflict-body {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 1rem;
 }
 
 .conflict-times {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
+  gap: 0.5rem;
+  padding: 0.75rem;
   background: var(--el-fill-color-light);
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
 }
 
 .conflict-time {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .time-label {
   font-weight: 500;
-  min-width: 100px;
+  min-width: 6.25rem;
 }
 
 .conflict-choice {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0.5rem;
   align-items: flex-start;
 }
 </style>

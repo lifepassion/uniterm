@@ -5,7 +5,6 @@ package session
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -17,7 +16,102 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ys-ll/uniterm/backend/platform"
 )
+
+// The wsl.localhost 9P share cannot report Linux symbolic links: they surface
+// as plain files whose stat fails ("cannot be resolved by the system"), so
+// type, mode, size and mtime of symlinks cannot come from the share itself.
+// The helpers below correct the listing from `ls -lAn` output and let
+// directory navigation fall back to the link's real target.
+
+// testDirScript builds the sh snippet that reports which paths resolve to a
+// directory: one "<n> d" line per directory, in order; files print nothing.
+// It must be free of shell variables — wsl.exe re-quotes argv inside double
+// quotes before handing it to the login shell, so $vars/$((...)) would be
+// expanded to nothing before sh ever sees the script.
+func testDirScript(paths []string) string {
+	var b strings.Builder
+	for i, p := range paths {
+		fmt.Fprintf(&b, "; if [ -d %s ]; then echo %s; fi", shellEscape(p), shellEscape(fmt.Sprintf("%d d", i+1)))
+	}
+	return strings.TrimPrefix(b.String(), "; ")
+}
+
+// readlinkFollowScript builds the sh snippet that prints the canonical target
+// of path — and only for actual symlinks: plain readlink errors on non-links,
+// which fails the whole chain.
+func readlinkFollowScript(p string) string {
+	return "readlink " + shellEscape(p) + " >/dev/null && readlink -f " + shellEscape(p)
+}
+
+// parseSymDirReply parses the reply of testDirScript into a name→is-dir set.
+// Reply lines are "<n> d"; noise lines are skipped (files print nothing).
+func parseSymDirReply(out string, paths []string) map[string]bool {
+	res := make(map[string]bool)
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		if len(f) != 2 {
+			continue
+		}
+		idx, err := strconv.Atoi(f[0])
+		if err != nil || idx < 1 || idx > len(paths) {
+			continue
+		}
+		if f[1] == "d" {
+			res[paths[idx-1]] = true
+		}
+	}
+	return res
+}
+
+// applyLsEnrichment merges `ls -lAn` output into the UNC-derived listing:
+// uid/gid-derived owner/group for every entry, plus — for symlink entries,
+// which the share reports as anonymous plain files — mode, size, mtime and
+// dir-ness straight from ls. Entries absent from ls stay untouched.
+func applyLsEnrichment(files []FileItem, entries []lsEntry, symDirs map[string]bool, users, groups map[int]string) {
+	byName := make(map[string]lsEntry, len(entries))
+	for _, e := range entries {
+		byName[e.Name] = e
+	}
+	for i := range files {
+		e, ok := byName[files[i].Name]
+		if !ok {
+			continue
+		}
+		uid, err1 := strconv.Atoi(e.Owner)
+		gid, err2 := strconv.Atoi(e.Group)
+		if err1 == nil && err2 == nil {
+			files[i].Owner = linuxIDName(users, uid)
+			files[i].Group = linuxIDName(groups, gid)
+		}
+		if strings.HasPrefix(e.Mode, "l") {
+			// The share cannot describe symlinks — take everything from ls.
+			files[i].Mode = e.Mode
+			files[i].Size = e.Size
+			if !e.ModTime.IsZero() {
+				files[i].ModTime = e.ModTime.Format(time.RFC3339)
+			}
+			files[i].IsDir = symDirs[files[i].Name]
+		}
+	}
+}
+
+// linuxIDName maps a numeric uid/gid to a display name, falling back to the
+// number itself when /etc/passwd or /etc/group lacked the entry.
+func linuxIDName(m map[int]string, id int) string {
+	if n, ok := m[id]; ok {
+		return n
+	}
+	return fmt.Sprintf("%d", id)
+}
+
+// isShareTraverseErr reports the wsl.localhost failure when an open crosses a
+// symbolic link: the 9P redirector cannot follow it.
+func isShareTraverseErr(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "cannot be resolved by the system")
+}
 
 // WSLFileSession is the file-transfer companion for a WSL terminal. The "remote"
 // filesystem is the WSL distribution's own view reached through the Windows UNC
@@ -100,6 +194,7 @@ func (s *WSLFileSession) resolveHome(ctx context.Context, distro string) string 
 
 func (s *WSLFileSession) probeHome(ctx context.Context, distro string) (string, bool) {
 	cmd := exec.CommandContext(ctx, "wsl.exe", "-d", distro, "--", "sh", "-c", "echo $HOME")
+	platform.HideConsoleWindow(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return "", false
@@ -188,15 +283,86 @@ func fileItemsFromDir(dir string, entries []os.DirEntry) []FileItem {
 
 // --- listing ---------------------------------------------------------------
 
+// wslMountLocalPath maps a POSIX path under /mnt/<drive> to the corresponding
+// local Windows path when the first segment is a single, existing drive letter;
+// otherwise ok is false and the caller stays on the wsl.localhost share.
+// Matching is case-insensitive (/mnt/C == /mnt/c); non-drive mounts such as
+// /mnt/wsl never map.
+func wslMountLocalPath(p string) (string, bool) {
+	rest, found := strings.CutPrefix(p, "/mnt/")
+	if !found {
+		return "", false
+	}
+	letter, tail := rest, ""
+	if i := strings.Index(rest, "/"); i >= 0 {
+		letter, tail = rest[:i], rest[i+1:]
+	}
+	if len(letter) != 1 {
+		return "", false
+	}
+	drive := strings.ToUpper(letter) + `:\`
+	if _, err := os.Stat(drive); err != nil {
+		return "", false
+	}
+	if tail == "" {
+		return drive, true
+	}
+	return filepath.Join(drive, filepath.FromSlash(tail)), true
+}
+
+// listMntRoot synthesizes the /mnt listing: the 9P share denies the
+// mountpoint, but its drive children are the local drives, so each existing
+// Windows drive is rendered as a lowercase directory named after the mount
+// (c, d, ...). Non-drive mounts cannot be enumerated from Windows and are
+// omitted.
+func (s *WSLFileSession) listMntRoot() FileListResult {
+	files := make([]FileItem, 0, 8)
+	if drives, err := s.ListLocalDrives(); err == nil {
+		for _, d := range drives {
+			files = append(files, FileItem{
+				Name:    strings.ToLower(d.Name[:1]),
+				ModTime: d.ModTime,
+				Mode:    "drwxr-xr-x",
+				IsDir:   true,
+			})
+		}
+	}
+	return FileListResult{Files: files, Dir: "/mnt"}
+}
+
 func (s *WSLFileSession) ListRemote(dir string) (FileListResult, error) {
 	d := s.resolveRemote(dir)
+	if d == "/mnt" {
+		return s.listMntRoot(), nil
+	}
+	if local, ok := wslMountLocalPath(d); ok {
+		entries, err := os.ReadDir(local)
+		if err != nil {
+			return FileListResult{}, err
+		}
+		return FileListResult{Files: fileItemsFromDir(local, entries), Dir: d}, nil
+	}
 	entries, err := os.ReadDir(s.uncPath(d))
 	if err != nil {
-		return FileListResult{}, err
+		return FileListResult{}, s.shareError(d, err)
 	}
 	files := fileItemsFromDir(s.uncPath(d), entries)
-	s.applyOwnerGroups(files, d)
+	s.enrichListing(files, d)
 	return FileListResult{Files: files, Dir: d}, nil
+}
+
+// shareError converts a failed wsl.localhost access into user guidance where
+// the failure is structural: /mnt Windows-drive mounts are denied through the
+// share (the drive→WSL→drive loopback) — those files ARE the local drive, so
+// the local pane is the way to reach them. Anything else passes through raw.
+func (s *WSLFileSession) shareError(d string, err error) error {
+	if d != "/mnt" && !strings.HasPrefix(d, "/mnt/") {
+		return err
+	}
+	if d == "/mnt" {
+		return fmt.Errorf("cannot list %s: Windows-drive mounts aren't reachable through the WSL file share (open C:\\ and the like from the local pane instead)", d)
+	}
+	return fmt.Errorf("cannot open %s: /mnt Windows-drive mounts aren't reachable through the WSL file share (open %s from the local pane instead)", d, s.wslMountDrive(d))
 }
 
 // --- owner/group resolution (matching SFTP's /etc/passwd + /etc/group) -------
@@ -214,71 +380,131 @@ func (s *WSLFileSession) ensureNameMaps() {
 	})
 }
 
-// applyOwnerGroups fills Owner/Group on the listing. os.Stat through the
-// wsl.localhost share yields no POSIX uid/gid, so the per-directory numeric
-// uid/gid come from a single `wsl ls -ln` call, then mapped via /etc/passwd +
-// /etc/group. Failures degrade to empty owner/group rather than aborting the
-// listing.
-func (s *WSLFileSession) applyOwnerGroups(files []FileItem, dir string) {
+// enrichListing post-processes a listing with a single `wsl ls -lAn` call:
+// uid/gid-derived owner/group for every entry, plus — since the wsl.localhost
+// 9P share cannot report Linux symlinks (they surface as plain, unstattable
+// files) — mode, size, mtime and dir-ness for symlink entries, with dir
+// symlinks probed in one extra batched round-trip. Failures degrade to the
+// un-enriched listing rather than aborting it.
+func (s *WSLFileSession) enrichListing(files []FileItem, dir string) {
 	s.ensureNameMaps()
 	if len(files) == 0 {
 		return
 	}
-	out, err := exec.Command("wsl.exe", "-d", s.distro, "--", "ls", "-lAn", dir).Output()
+	cmd := exec.Command("wsl.exe", "-d", s.distro, "--", "ls", "-lAn", dir)
+	platform.HideConsoleWindow(cmd)
+	out, err := cmd.Output()
 	if err != nil {
 		return
 	}
-	if len(files) == 0 {
-		return
-	}
-	m := make(map[string][2]int, len(files))
-	for _, line := range strings.Split(string(out), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 8 {
-			continue
+	entries := parseLsLongListing(string(out))
+	var symNames []string
+	for _, e := range entries {
+		if strings.HasPrefix(e.Mode, "l") {
+			symNames = append(symNames, e.Name)
 		}
-		uid, err1 := strconv.Atoi(fields[2])
-		gid, err2 := strconv.Atoi(fields[3])
-		if err1 != nil || err2 != nil {
-			continue
-		}
-		m[strings.Join(fields[8:], " ")] = [2]int{uid, gid}
 	}
-	for i := range files {
-		og, ok := m[files[i].Name]
-		if !ok {
-			continue
-		}
-		files[i].Owner = s.nameForID(s.userMap, og[0])
-		files[i].Group = s.nameForID(s.groupMap, og[1])
-	}
+	symDirs := s.resolveSymlinkDirs(dir, symNames)
+	applyLsEnrichment(files, entries, symDirs, s.userMap, s.groupMap)
 }
 
-func (s *WSLFileSession) nameForID(m map[int]string, id int) string {
-	if n, ok := m[id]; ok {
-		return n
+// resolveSymlinkDirs determines, for a batch of entry names in dir, which
+// symlinks point at directories — one sh round-trip instead of one per entry.
+func (s *WSLFileSession) resolveSymlinkDirs(dir string, names []string) map[string]bool {
+	if len(names) == 0 {
+		return nil
 	}
-	return fmt.Sprintf("%d", id)
+	paths := make([]string, len(names))
+	for i, n := range names {
+		paths[i] = path.Join(dir, n)
+	}
+	cmd := exec.Command("wsl.exe", "-d", s.distro, "--", "sh", "-c", testDirScript(paths))
+	platform.HideConsoleWindow(cmd)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	return parseSymDirReply(string(out), names)
+}
+
+// readlinkTarget resolves p when it is a symbolic link, returning its
+// canonical absolute target. Non-links (or wsl failures) yield an error.
+func (s *WSLFileSession) readlinkTarget(p string) (string, error) {
+	cmd := exec.Command("wsl.exe", "-d", s.distro, "--", "sh", "-c", readlinkFollowScript(p))
+	platform.HideConsoleWindow(cmd)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	t := strings.TrimSpace(string(out))
+	if !strings.HasPrefix(t, "/") {
+		return "", fmt.Errorf("not a symlink: %s", p)
+	}
+	return t, nil
+}
+
+// canonicalPath resolves p with `readlink -f`, replacing EVERY symlink in the
+// path — last component or mid-path — with its real target; plain paths come
+// back unchanged. The 9P redirector cannot open a path crossing a link ("The
+// directory name is invalid"), so any path it will open must be canonical
+// first. Errors mean the path's parent chain is broken.
+func (s *WSLFileSession) canonicalPath(p string) (string, error) {
+	cmd := exec.Command("wsl.exe", "-d", s.distro, "--", "readlink", "-f", p)
+	platform.HideConsoleWindow(cmd)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	t := strings.TrimSpace(string(out))
+	if !strings.HasPrefix(t, "/") {
+		return "", fmt.Errorf("not a path: %s", p)
+	}
+	return t, nil
 }
 
 func (s *WSLFileSession) ChangeRemoteDir(dir string) (FileListResult, error) {
 	d := s.resolveRemote(dir)
-	fi, err := os.Stat(s.uncPath(d))
-	if err != nil {
-		// Windows-drive drvfs mounts (/mnt/<X>) aren't reachable through the
-		// wsl.localhost share — Windows denies the drive→WSL→drive loopback
-		// (ERROR_ACCESS_DENIED). Those files are the same as the local drive,
-		// so guide the user to the local pane instead of failing silently.
-		if os.IsPermission(err) && strings.HasPrefix(d, "/mnt/") {
-			return FileListResult{}, fmt.Errorf("cannot open %s: /mnt Windows-drive mounts aren't reachable through the WSL file share (open %s from the local pane instead)", d, s.wslMountDrive(d))
+	if d == "/mnt" {
+		s.cwd = d
+		return s.listMntRoot(), nil
+	}
+	if local, ok := wslMountLocalPath(d); ok {
+		fi, err := os.Stat(local)
+		if err != nil {
+			// Linux symlinks on a mounted drive are LX reparse points the
+			// Windows side cannot resolve (Stat fails); canonicalize via
+			// the distro and continue at the real target, like the
+			// share-side fallback below.
+			if canon, cerr := s.canonicalPath(d); cerr == nil && canon != d {
+				return s.ChangeRemoteDir(canon)
+			}
+			return FileListResult{}, err
 		}
-		return FileListResult{}, err
+		if !fi.IsDir() {
+			return FileListResult{}, fmt.Errorf("not a directory: %s", d)
+		}
+		s.cwd = d
+		return s.ListRemote(d)
 	}
-	if !fi.IsDir() {
-		return FileListResult{}, fmt.Errorf("not a directory: %s", d)
+	// Canonicalize before touching the share: a link anywhere in the path —
+	// the entry itself or mid-path (a stale cwd restored from cache/history)
+	// — makes every open fail ("The directory name is invalid"). Plain paths
+	// come back unchanged; a resolved target re-enters the full dispatch so
+	// one under /mnt maps to the local drive view.
+	if canon, cerr := s.canonicalPath(d); cerr == nil && canon != d {
+		return s.ChangeRemoteDir(canon)
 	}
-	s.cwd = d
-	return s.ListRemote(d)
+	fi, statErr := os.Stat(s.uncPath(d))
+	if statErr == nil && fi.IsDir() {
+		s.cwd = d
+		return s.ListRemote(d)
+	}
+	if statErr != nil {
+		// /mnt Windows-drive mounts are denied by the share (drive→WSL→drive
+		// loopback); guide the user to the local pane instead of a raw error.
+		return FileListResult{}, s.shareError(d, statErr)
+	}
+	return FileListResult{}, fmt.Errorf("not a directory: %s", d)
 }
 
 // wslMountDrive maps a /mnt/<letter> mount path back to its Windows drive
@@ -302,13 +528,45 @@ func (s *WSLFileSession) wslMountDrive(d string) string {
 // --- remote attributes / dirs ----------------------------------------------
 
 func (s *WSLFileSession) MakeDir(dir string) error {
+	if local, ok := wslMountLocalPath(s.resolveRemote(dir)); ok {
+		return os.Mkdir(local, 0o755)
+	}
 	return os.Mkdir(s.uncPath(s.resolveRemote(dir)), 0o755)
+}
+
+// wslSymlinkCmd builds the wsl.exe invocation that creates a symbolic link
+// inside the distro (the wsl.localhost UNC share cannot create Linux links).
+func wslSymlinkCmd(distro, target, linkPath string) *exec.Cmd {
+	cmd := exec.Command("wsl.exe", "-d", distro, "--", "ln", "-s", target, linkPath)
+	platform.HideConsoleWindow(cmd)
+	return cmd
+}
+
+// Symlink creates a symbolic link inside the WSL distro. The link path is a
+// POSIX path resolved against the session cwd; the target is stored verbatim
+// (a relative target resolves against the link's own directory).
+func (s *WSLFileSession) Symlink(target, linkPath string) error {
+	cmd := wslSymlinkCmd(s.distro, target, s.resolveRemote(linkPath))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		msg := strings.TrimSpace(string(out))
+		if msg != "" {
+			return fmt.Errorf("%s", msg)
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *WSLFileSession) Remove(p string, recursive bool) error {
 	c := s.resolveRemote(p)
 	if c == "/" || c == "." {
 		return fmt.Errorf("refusing to delete path: %s", c)
+	}
+	if local, ok := wslMountLocalPath(c); ok {
+		if recursive {
+			return os.RemoveAll(local)
+		}
+		return os.Remove(local)
 	}
 	full := s.uncPath(c)
 	if recursive {
@@ -318,30 +576,77 @@ func (s *WSLFileSession) Remove(p string, recursive bool) error {
 }
 
 func (s *WSLFileSession) Rename(oldName, newName string) error {
+	oldL, oldOK := wslMountLocalPath(s.resolveRemote(oldName))
+	newL, newOK := wslMountLocalPath(s.resolveRemote(newName))
+	if oldOK && newOK {
+		return os.Rename(oldL, newL)
+	}
 	return os.Rename(s.uncPath(s.resolveRemote(oldName)), s.uncPath(s.resolveRemote(newName)))
 }
 
 func (s *WSLFileSession) Chmod(p string, mode os.FileMode) error {
+	if local, ok := wslMountLocalPath(s.resolveRemote(p)); ok {
+		return os.Chmod(local, mode)
+	}
 	return os.Chmod(s.uncPath(s.resolveRemote(p)), mode)
 }
 
 // --- content read/write ------------------------------------------------------
 
+// uncPathResolved returns the UNC path for a POSIX remote path. Symbolic
+// links cannot be traversed through the wsl.localhost share (Stat surfaces
+// them as ModeIrregular reparse points and open fails), so the path is
+// canonicalized via `readlink -f` — following a final-component link or
+// healing one mid-path (e.g. from a stale cwd). Ordinary paths return the
+// plain UNC form unchanged.
+func (s *WSLFileSession) uncPathResolved(remotePath string) string {
+	full := s.uncPath(remotePath)
+	if fi, err := os.Stat(full); err == nil && fi.Mode()&os.ModeIrregular == 0 {
+		return full
+	}
+	if canon, cerr := s.canonicalPath(remotePath); cerr == nil {
+		return s.uncPath(canon)
+	}
+	return full
+}
+
 func (s *WSLFileSession) GetContent(remotePath string) ([]byte, error) {
-	return os.ReadFile(s.uncPath(s.resolveRemote(remotePath)))
+	p := s.resolveRemote(remotePath)
+	if local, ok := wslMountLocalPath(p); ok {
+		return os.ReadFile(local)
+	}
+	b, err := os.ReadFile(s.uncPathResolved(p))
+	if isShareTraverseErr(err) {
+		return nil, fmt.Errorf("cannot open %s: symbolic links cannot be traversed through the WSL file share", remotePath)
+	}
+	return b, err
 }
 
 func (s *WSLFileSession) PutContent(remotePath string, content []byte) error {
-	return os.WriteFile(s.uncPath(s.resolveRemote(remotePath)), content, 0o644)
+	p := s.resolveRemote(remotePath)
+	if local, ok := wslMountLocalPath(p); ok {
+		return os.WriteFile(local, content, 0o644)
+	}
+	return os.WriteFile(s.uncPathResolved(p), content, 0o644)
 }
 
 func (s *WSLFileSession) Copy(oldPath, newPath string) error {
+	oldL, oldOK := wslMountLocalPath(s.resolveRemote(oldPath))
+	newL, newOK := wslMountLocalPath(s.resolveRemote(newPath))
+	if oldOK && newOK {
+		return copyPath(oldL, newL, nil)
+	}
 	return copyPath(s.uncPath(s.resolveRemote(oldPath)), s.uncPath(s.resolveRemote(newPath)), nil)
 }
 
 func (s *WSLFileSession) Move(oldPath, newPath string) error {
-	oldU := s.uncPath(s.resolveRemote(oldPath))
-	newU := s.uncPath(s.resolveRemote(newPath))
+	oldL, oldOK := wslMountLocalPath(s.resolveRemote(oldPath))
+	newL, newOK := wslMountLocalPath(s.resolveRemote(newPath))
+	oldU, newU := oldL, newL
+	if !oldOK || !newOK {
+		oldU = s.uncPath(s.resolveRemote(oldPath))
+		newU = s.uncPath(s.resolveRemote(newPath))
+	}
 	if err := os.Rename(oldU, newU); err == nil {
 		return nil
 	}
@@ -354,23 +659,29 @@ func (s *WSLFileSession) Move(oldPath, newPath string) error {
 // --- transfers ---------------------------------------------------------------
 
 func (s *WSLFileSession) Get(remotePath, localPath string, recursive bool) (string, error) {
-	return s.startLocalTransfer("download", s.resolveLocal(localPath), s.uncPath(s.resolveRemote(remotePath)))
+	return s.startLocalTransfer("download", s.resolveLocal(localPath), s.resolveRemote(remotePath))
 }
 
 func (s *WSLFileSession) Put(localPath, remotePath string, recursive bool) (string, error) {
-	return s.startLocalTransfer("upload", s.resolveLocal(localPath), s.uncPath(s.resolveRemote(remotePath)))
+	return s.startLocalTransfer("upload", s.resolveLocal(localPath), s.resolveRemote(remotePath))
 }
 
 // startLocalTransfer copies a file or tree between the Windows-local pane and
-// the WSL UNC path. Both endpoints are on the same machine, so this is a local
-// copy; a Task is reported through the usual OSC 633 transfer events so the
-// frontend TransferPanel stays in sync.
+// the WSL filesystem. Both endpoints are on the same machine, so this is a
+// local copy; a Task is reported through the usual OSC 633 transfer events so
+// the frontend TransferPanel stays in sync. remote is the POSIX display path;
+// the OS path behind it is the /mnt drive mapping when one applies, the
+// wsl.localhost UNC form otherwise.
 func (s *WSLFileSession) startLocalTransfer(tfType, local, remote string) (string, error) {
-	src := remote
+	remoteOS, ok := wslMountLocalPath(remote)
+	if !ok {
+		remoteOS = s.uncPathResolved(remote)
+	}
+	src := remoteOS
 	dst := local
 	if tfType == "upload" {
 		src = local
-		dst = remote
+		dst = remoteOS
 	}
 	total, err := dirSize(src)
 	if err != nil {
@@ -401,11 +712,10 @@ func (s *WSLFileSession) startLocalTransfer(tfType, local, remote string) (strin
 			s.mu.Unlock()
 		}()
 		if err := copyPath(src, dst, task); err != nil {
-			task.Status = "error"
 			s.emitTransferEvent(task, err)
 			return
 		}
-		task.Progress = task.Total
+		task.setProgress(task.loadTotal())
 		task.Status = "done"
 		s.emitTransferProgress(task)
 		s.emitTransferComplete(task)
@@ -494,7 +804,7 @@ func copyFile(src, dst string, task *TransferTask) error {
 				return werr
 			}
 			if task != nil {
-				task.Progress += int64(n)
+				task.addProgress(int64(n))
 			}
 		}
 		if rerr == io.EOF {
@@ -528,7 +838,7 @@ func (s *WSLFileSession) PauseTransfer(taskID string) error {
 	if !ok {
 		return fmt.Errorf("task not found: %s", taskID)
 	}
-	t.paused = true
+	t.setPaused(true)
 	t.Status = "paused"
 	s.emitTransferComplete(t)
 	return nil
@@ -541,7 +851,7 @@ func (s *WSLFileSession) ResumeTransfer(taskID string) error {
 	if !ok {
 		return fmt.Errorf("task not found: %s", taskID)
 	}
-	t.paused = false
+	t.setPaused(false)
 	t.Status = "running"
 	close(t.pauseCh)
 	t.pauseCh = make(chan struct{})
@@ -580,43 +890,3 @@ func (s *WSLFileSession) Disconnect() error {
 	return nil
 }
 
-// --- transfer event emission (OSC 633 window-reporting, like SFTP) -----------
-
-func (s *WSLFileSession) emitTransferStart(task *TransferTask) {
-	name := path.Base(task.RemotePath)
-	if task.Type == "download" {
-		name = path.Base(task.RemotePath)
-	}
-	payload := map[string]interface{}{
-		"type": "sftp:transfer", "taskId": task.ID, "event": "start",
-		"tfType": task.Type, "name": name, "total": task.Total,
-	}
-	jsonBytes, _ := json.Marshal(payload)
-	s.emitData([]byte("\x1b]633;S" + string(jsonBytes) + "\x07"))
-}
-
-func (s *WSLFileSession) emitTransferProgress(task *TransferTask) {
-	payload := map[string]interface{}{
-		"type": "sftp:transfer", "taskId": task.ID, "event": "progress",
-		"progress": task.Progress, "total": task.Total,
-	}
-	jsonBytes, _ := json.Marshal(payload)
-	s.emitData([]byte("\x1b]633;S" + string(jsonBytes) + "\x07"))
-}
-
-func (s *WSLFileSession) emitTransferComplete(task *TransferTask) {
-	payload := map[string]interface{}{
-		"type": "sftp:transfer", "taskId": task.ID, "event": "complete", "status": task.Status,
-	}
-	jsonBytes, _ := json.Marshal(payload)
-	s.emitData([]byte("\x1b]633;S" + string(jsonBytes) + "\x07"))
-}
-
-func (s *WSLFileSession) emitTransferEvent(task *TransferTask, err error) {
-	payload := map[string]interface{}{
-		"type": "sftp:transfer", "taskId": task.ID, "event": "complete",
-		"status": "error", "error": err.Error(),
-	}
-	jsonBytes, _ := json.Marshal(payload)
-	s.emitData([]byte("\x1b]633;S" + string(jsonBytes) + "\x07"))
-}

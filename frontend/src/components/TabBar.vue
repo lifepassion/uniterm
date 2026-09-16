@@ -16,6 +16,7 @@
 
         <TabItem
           :tab="tab"
+          :shortcut-index="index + 1"
           :is-active="tab.id === activeTabId"
           @activate="setActiveTab"
           @close="closeTab"
@@ -304,7 +305,7 @@ function clearDragState() {
 .tab-bar {
   display: flex;
   align-items: center;
-  height: 40px;
+  height: 2.5rem;
   background: var(--bg-base);
   border-bottom: 1px solid var(--border-subtle);
   position: relative;
@@ -330,17 +331,17 @@ function clearDragState() {
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  padding: 0 4px;
+  padding: 0 0.25rem;
 }
 .tab-more-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-muted);
   letter-spacing: 1px;
@@ -353,12 +354,12 @@ function clearDragState() {
 }
 
 .tab-drop-indicator {
-  width: 2px;
-  min-width: 2px;
+  width: 0.125rem;
+  min-width: 0.125rem;
   align-self: stretch;
   background: var(--accent);
   opacity: 0.8;
-  margin: 4px 0;
+  margin: 0.25rem 0;
   border-radius: 1px;
   flex-shrink: 0;
 }

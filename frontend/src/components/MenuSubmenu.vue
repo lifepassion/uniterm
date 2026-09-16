@@ -1,7 +1,7 @@
 <template>
   <MenuItem iconic class="submenu-wrap" @mouseenter="submenu.active = name">
     {{ label }}
-    <el-icon class="menu-icon-trailing"><ChevronRight :size="13" /></el-icon>
+    <el-icon class="menu-icon-trailing"><ChevronRight :size="'0.8125rem'" /></el-icon>
     <div v-show="submenu.active === name" class="menu-submenu" @mouseleave="submenu.active = ''">
       <slot />
     </div>

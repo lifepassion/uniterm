@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { reactive } from 'vue'
 import { Events } from '@wailsio/runtime'
 import type { SessionStatus } from '../types/session'
+import { useZmodemStore } from './zmodemStore'
 
 interface SessionData {
   id: string
@@ -86,7 +87,17 @@ unsubSessionStatus =Events.On('session:status', (ev) => { const payload: { id: s
   }
  })
 
-unsubSessionData =Events.On('session:data', (ev) => { const payload: { id: string; data: string } = ev.data; 
+unsubSessionData =Events.On('session:data', (ev) => { const payload: { id: string; data: string } = ev.data;
+  // Chunks arriving inside a zmodem cancel window are residual binary
+  // garbage from the aborted transfer (the backend has already left binary
+  // mode, so the bytes take the text path). They are swallowed from live
+  // rendering too; storing them here would replay them straight into xterm
+  // on tab-switch gap replay, which bypasses the zmodem gates.
+  try {
+    if (Date.now() < useZmodemStore().getCancelUntil(payload.id)) return
+  } catch (_) {
+    // Pinia not installed yet (event before app init) — store normally.
+  }
   let s = sessionState.sessions.get(payload.id)
   if (!s) {
     s = { id: payload.id, status: 'connecting', data: [], seq: 0, bytes: 0 }

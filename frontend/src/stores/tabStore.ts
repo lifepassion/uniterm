@@ -1,8 +1,6 @@
 import { defineStore } from 'pinia'
 import { reactive, computed } from 'vue'
-import type { Tab, TerminalTab, SettingsTab, WorkspaceTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, StartTab, PanelLayout, LayoutNode, X11DesktopTab } from '../types/workspace'
-import type { K8sTab } from '../types/k8s'
-import type { ContainerTab } from '../types/container'
+import type { Tab, TerminalTab, WorkspaceTab, StartTab, PanelLayout, LayoutNode } from '../types/workspace'
 import { usePanelStore } from './panelStore'
 import { t } from '../i18n'
 
@@ -189,155 +187,13 @@ export const useTabStore = defineStore('tab', () => {
     return tab
   }
 
-  // Close a start tab atomically and move a newly-created tab into its
-  // position. Callers should create the new tab first, then call this.
-  function closeStartAndReposition(startTabId: string, newTabId: string) {
-    const startIdx = tabState.tabs.findIndex(t => t.id === startTabId)
-    if (startIdx === -1) return
-    const newIdx = tabState.tabs.findIndex(t => t.id === newTabId)
-    if (newIdx === -1) return
-    // Remove new tab from its current position
-    const [moved] = tabState.tabs.splice(newIdx, 1)
-    // Calculate target: startIdx if new was after start, else startIdx-1
-    const target = newIdx > startIdx ? startIdx : startIdx
-    tabState.tabs.splice(target, 0, moved)
-    // Now remove start tab (its index may have shifted)
-    const curStartIdx = tabState.tabs.findIndex(t => t.id === startTabId)
-    if (curStartIdx >= 0) tabState.tabs.splice(curStartIdx, 1)
-  }
-
-  function createSettingsTab(name: string, panelId: string): SettingsTab {
-    const tab: SettingsTab = {
-      type: 'settings',
-      id: genId('settings-tab'),
-      panelId,
-      name
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createSFPTab(name: string, panelId: string): SFTPTab {
-    const tab: SFTPTab = {
-      type: 'sftp',
-      id: genId('sftp-tab'),
-      panelId,
-      name
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createFtpTab(name: string, panelId: string): SFTPTab {
-    const tab: SFTPTab = {
-      type: 'sftp',
-      id: genId('ftp-tab'),
-      panelId,
-      name
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createRDPTab(name: string, panelId: string): RDPTab {
-    const tab: RDPTab = {
-      type: 'rdp',
-      id: genId('rdp-tab'),
-      panelId,
-      name
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createVNCTab(name: string, panelId: string): VNCTab {
-    const tab: VNCTab = {
-      type: 'vnc',
-      id: genId('vnc-tab'),
-      panelId,
-      name
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createSPICETab(name: string, panelId: string): SPICETab {
-    const tab: SPICETab = {
-      type: 'spice',
-      id: genId('spice-tab'),
-      panelId,
-      name
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createX11DesktopTab(name: string, panelId: string): X11DesktopTab {
-    const tab: X11DesktopTab = {
-      type: 'x11-desktop',
-      id: genId('x11-tab'),
-      panelId,
-      name
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createDBTab(name: string, panelId: string): DBTab {
-    const tab: DBTab = {
-      type: 'database',
-      id: genId('db-tab'),
-      panelId,
-      name
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createMonitorTab(name: string, panelId: string): MonitorTab {
-    const tab: MonitorTab = {
-      type: 'monitor',
-      id: genId('monitor-tab'),
-      panelId,
-      name
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createK8sTab(name: string, panelId: string, connectionId: string, namespace: string): K8sTab {
-    const tab: K8sTab = {
-      type: 'k8s',
-      id: genId('k8s-tab'),
-      panelId,
-      name,
-      connectionId,
-      connId: null,
-      namespace,
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createContainerTab(name: string, panelId: string, connectionId: string, runtime: ContainerTab['runtime']): ContainerTab {
-    const tab: ContainerTab = {
-      type: 'container',
-      id: genId('container-tab'),
-      panelId,
-      name,
-      connectionId,
-      runtime,
-    }
+  // Single factory for the uniform tab kinds — push + activate, parameterized
+  // by tab type. `extra` carries the fields only some kinds have (k8s:
+  // connectionId/namespace, container: runtime/connectionId). Terminal tabs
+  // keep dedicated creators (insert-at-index, start-tab replacement);
+  // workspace/start tabs build richer state.
+  function createTab(type: Tab['type'], name: string, panelId: string, extra?: Record<string, unknown>): Tab {
+    const tab = { type, id: genId(`${type}-tab`), panelId, name, ...extra } as Tab
     tabState.tabs.push(tab)
     tabState.activeTabId = tab.id
     return tab
@@ -467,7 +323,15 @@ export const useTabStore = defineStore('tab', () => {
     const t = tabState.tabs.find(x => x.id === tabId)
     if (t && t.type === 'workspace') {
       t.activePanelId = panelId
+      if (t.maximizedPanelId) t.maximizedPanelId = panelId
     }
+  }
+
+  function toggleWorkspacePanelMaximize(tabId: string) {
+    const t = tabState.tabs.find(x => x.id === tabId)
+    if (!t || t.type !== 'workspace' || !t.activePanelId) return null
+    t.maximizedPanelId = t.maximizedPanelId ? null : t.activePanelId
+    return t.maximizedPanelId
   }
 
   function updateWorkspaceLayout(tabId: string, layout: PanelLayout) {
@@ -568,7 +432,33 @@ export const useTabStore = defineStore('tab', () => {
       root: insertPanelIntoLayout(wsTab.layout.root, targetPanelId, newPanelId, direction, insertBefore)
     }
     wsTab.activePanelId = newPanelId
+    if (wsTab.maximizedPanelId) wsTab.maximizedPanelId = newPanelId
     tabState.activeTabId = workspaceTabId
+  }
+
+  // Add a newly-created panel directly to an existing workspace. Unlike
+  // addPanelToWorkspaceTab, there is no temporary terminal tab to remove.
+  function addNewPanelToWorkspace(
+    workspaceTabId: string,
+    newPanelId: string,
+    targetPanelId?: string,
+  ): boolean {
+    const wsTab = tabState.tabs.find(t => t.id === workspaceTabId)
+    if (!wsTab || wsTab.type !== 'workspace') return false
+
+    const target = targetPanelId && wsTab.panelIds.includes(targetPanelId)
+      ? targetPanelId
+      : wsTab.activePanelId || wsTab.panelIds[wsTab.panelIds.length - 1]
+    if (!target) return false
+
+    wsTab.layout = {
+      root: insertPanelIntoLayout(wsTab.layout.root, target, newPanelId, 'horizontal', false),
+    }
+    wsTab.panelIds = collectPanelIds(wsTab.layout.root)
+    wsTab.activePanelId = newPanelId
+    if (wsTab.maximizedPanelId) wsTab.maximizedPanelId = newPanelId
+    tabState.activeTabId = workspaceTabId
+    return true
   }
 
   // ── Detach: panel from workspace ──
@@ -587,6 +477,9 @@ export const useTabStore = defineStore('tab', () => {
     tabState.broadcastPanelIds.delete(panelId)
     if (wsTab.activePanelId === panelId) {
       wsTab.activePanelId = wsTab.panelIds[0] || null
+    }
+    if (wsTab.maximizedPanelId === panelId) {
+      wsTab.maximizedPanelId = null
     }
 
     // Keep AI lock when panel is detached from workspace — the
@@ -760,18 +653,8 @@ export const useTabStore = defineStore('tab', () => {
     createTerminalTab,
     createTerminalTabAt,
     replaceStartTab,
+    createTab,
     replaceStartWithTab,
-    createSettingsTab,
-    createSFPTab,
-    createFtpTab,
-    createRDPTab,
-    createVNCTab,
-    createSPICETab,
-    createX11DesktopTab,
-    createDBTab,
-    createMonitorTab,
-    createK8sTab,
-    createContainerTab,
     createStartTab,
     createWorkspaceTab,
     closeTab,
@@ -782,9 +665,11 @@ export const useTabStore = defineStore('tab', () => {
     moveTab,
     renameTab,
     setActivePanel,
+    toggleWorkspacePanelMaximize,
     updateWorkspaceLayout,
     mergeToWorkspace,
     addPanelToWorkspaceTab,
+    addNewPanelToWorkspace,
     removePanelFromWorkspaceTab,
     movePanelInWorkspace,
     setAILockedPanel,

@@ -2,7 +2,7 @@
   <div class="spice-tab-content">
     <!-- Connecting state -->
     <div v-if="status === 'connecting'" class="spice-overlay">
-      <el-icon class="is-loading" :size="32"><Loader /></el-icon>
+      <el-icon class="is-loading" :size="'2rem'"><Loader /></el-icon>
       <p>{{ t('spice.connecting', { host: config?.host || '...' }) }}</p>
     </div>
 
@@ -321,26 +321,26 @@ watch(() => props.sessionId, (newId) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 0.75rem;
   color: var(--text-muted);
   z-index: 10;
 }
 .spice-error-text { color: var(--error); }
 .spice-statusbar {
   flex-shrink: 0;
-  height: 24px;
+  height: 1.5rem;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
   background: var(--bg-elevated);
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   box-sizing: border-box;
   z-index: 5;
 }
 .spice-status-dot {
-  width: 8px; height: 8px;
+  width: 0.5rem; height: 0.5rem;
   border-radius: 50%;
   background: var(--success);
   flex-shrink: 0;
@@ -348,6 +348,6 @@ watch(() => props.sessionId, (newId) => {
 .spice-status-sep { color: var(--text-disabled); }
 .spice-scale-label {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 </style>

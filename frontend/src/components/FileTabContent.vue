@@ -23,6 +23,11 @@
           :cut-item-names="localCutItemNames"
           :clipboard-count="localClipboardCount"
           :clipboard-mode="localClipboard?.mode"
+          :can-back="localCanBack"
+          :can-forward="localCanForward"
+          @back="onLocalBack"
+          @forward="onLocalForward"
+          @up="onLocalUp"
           @navigate="onLocalNavigate"
           @send-to-other="onSendToRemote"
           @rename="onLocalRename"
@@ -31,6 +36,7 @@
           @mkdir="onLocalMkdir"
           @edit="onLocalEditFile"
           @edit-external="onLocalEditExternal"
+          @open-with-system="onLocalOpenWithSystem"
           @new-file="onLocalNewFile"
           @copy-to-clipboard="onLocalCopyToClipboard"
           @cut-to-clipboard="onLocalCutToClipboard"
@@ -41,6 +47,7 @@
           @cancel-load="onCancelLoadLocal"
           @save-bookmark="onLocalSaveBookmark"
           @remove-bookmark="onLocalRemoveBookmark"
+          toolbar-layout="flat"
         />
       </div>
       <div
@@ -66,17 +73,25 @@
           :cut-item-names="cutItemNames"
           :clipboard-count="clipboardCount"
           :clipboard-mode="clipboard?.mode"
+          :can-back="remoteCanBack"
+          :can-forward="remoteCanForward"
+          @back="onRemoteBack"
+          @forward="onRemoteForward"
+          @up="onRemoteUp"
           @navigate="onRemoteNavigate"
           @send-to-other="onSendToLocal"
           @rename="onRename"
           @delete="onDelete"
           @refresh="onRefreshRemote"
           @mkdir="onMkdir"
+          @symlink="onSymlink"
+          :supports-symlink="remoteSupportsSymlink"
           @chmod="(item: FileItem) => onChmod(item, 'remote')"
           @upload="onUpload"
           @download-to="onDownloadTo"
           @edit="onEditFile"
           @edit-external="onEditExternal"
+          @open-with-system="onOpenWithSystem"
           @new-file="onNewFile"
           @copy-to-clipboard="onCopyToClipboard"
           @cut-to-clipboard="onCutToClipboard"
@@ -87,16 +102,22 @@
           @cancel-load="onCancelLoadRemote"
           @save-bookmark="onSaveBookmark"
           @remove-bookmark="onRemoveBookmark"
+          toolbar-layout="flat"
         />
       </div>
     </div>
+    <!-- The panel bar is always visible; collapsing hides only the task list
+         (the persisted flag now tracks "list expanded", default collapsed). -->
     <TransferPanel
       v-model:height="transferHeight"
+      :collapsed="!settingsStore.sftpTransferPanelVisible"
+      @update:collapsed="(v: boolean) => settingsStore.sftpTransferPanelVisible = !v"
       resizable
       :tasks="transferTasks"
       @cancel="onCancelTransfer"
       @pause="onPauseTransfer"
       @resume="onResumeTransfer"
+      @retry="onRetryTransfer"
       @clearCompleted="clearFinishedTransfers"
     />
 
@@ -107,8 +128,11 @@
       :type="genDlg.type"
       :input-value="genDlg.inputValue"
       :placeholder="genDlg.placeholder"
+      :input2-value="genDlg.inputValue2"
+      :input2-placeholder="genDlg.input2Placeholder"
       :message="genDlg.message"
       @update:inputValue="(v: string) => genDlg.inputValue = v"
+      @update:input2Value="(v: string) => genDlg.inputValue2 = v"
       @confirm="onGenericConfirm"
       @cancel="onGenericCancel"
     />
@@ -152,9 +176,10 @@ import { useI18n } from '../i18n'
 import {
   SftpListRemote, SftpListLocal, SftpListLocalDrives,
   SftpChangeRemoteDir, SftpChangeLocalDir,
-  SftpGet, SftpPut,
   SftpOpenExternalEditor, OpenExternalEditorLocal, ListSessions,
+  SftpOpenWithSystem, OpenWithSystemLocal,
 } from '../../bindings/github.com/ys-ll/uniterm/app'
+
 import FileList from './FileList.vue'
 import TransferPanel from './TransferPanel.vue'
 import FileChmodDialog from './FileChmodDialog.vue'
@@ -164,12 +189,15 @@ import FileConflictDialog from './FileConflictDialog.vue'
 import type { FileItem } from './FileList.vue'
 import {
   useFilePanel, useConflictDialog, useFileDialogs, useFileListing, useChmodDialog,
-  useEditorBridge, useNativeFileDrop, remoteFileOps, localFileOps,
-  resolveRemoteTarget, resolveLocalTarget, joinPath, autoRename,
+  useEditorBridge, useNativeFileDrop, remoteFileOps, localFileOps, createSendToOther,
+  resolveRemoteTarget, resolveLocalTarget, joinPath,
 } from '../composables/useFilePanel'
+import { reconnectFileTransferPanel, isPanelReconnecting } from '../composables/usePanelReconnect'
+import { isConnectionLostError, supportsRemoteSymlink } from '../utils/fileTransferUtils'
 import { bindExtEditUploadedToast } from '../composables/useFilePanel'
 import { Events } from '@wailsio/runtime'
-import { useTransferTaskEvents } from '../composables/useTransferTasks'
+import { watchNewTransferTasks } from '../composables/useTransferTasks'
+import { registerTransferRoute, unregisterTransferRoute } from '../services/transferTaskCenter'
 
 const props = defineProps<{
   panelId: string
@@ -179,19 +207,11 @@ const panelStore = usePanelStore()
 const settingsStore = useSettingsStore()
 const transferTasks = panelStore.getTransferTasks(props.panelId)
 const transferHeight = ref(130)
-const transferEvents = useTransferTaskEvents(
-  () => transferTasks,
-  () => panel.value?.sessionId,
-  (status, type) => {
-    if (status === 'done') {
-      if (type === 'download') onRefreshLocal()
-      else onRefreshRemote()
-    }
-  },
-)
 const { t } = useI18n()
 bindExtEditUploadedToast()
 const panel = computed(() => panelStore.getPanel(props.panelId))
+// "New link" exists only for backends with link semantics (SFTP/SCP/WSL).
+const remoteSupportsSymlink = computed(() => supportsRemoteSymlink(panel.value?.config ?? undefined))
 
 const localDrives = ref<string[]>([])
 const dragOverLocal = ref(false)
@@ -227,7 +247,7 @@ const { chmodVisible, chmodItem, onChmod, onChmodConfirm } = chmod
 
 // ── Shared per-panel logic (clipboard, dialogs, file ops) — one instance per pane ──
 const conflicts = useConflictDialog()
-const { conflictVisible, conflictFiles, onConflictResolve, resolveConflicts } = conflicts
+const { conflictVisible, conflictFiles, onConflictResolve } = conflicts
 const fileDialogs = useFileDialogs()
 const { dlg: genDlg, onGenericConfirm, onGenericCancel } = fileDialogs
 
@@ -237,13 +257,16 @@ const remoteListing = useFileListing({
   list: SftpListRemote,
   changeDir: SftpChangeRemoteDir,
   resolveTarget: resolveRemoteTarget,
+  onListError: onRemoteListError,
 })
 const localListing = useFileListing({
   sid: () => panel.value?.sessionId ?? undefined,
   list: SftpListLocal,
   changeDir: SftpChangeLocalDir,
   resolveTarget: resolveLocalTarget,
-  initialDir: '/',
+  // No initialDir: an empty dir lets the backend answer with its own localCwd,
+  // which starts at the home directory. Passing '/' here used to override that
+  // and open the pane at the filesystem root, several clicks from ~ (#947).
   afterList: async (dir) => {
     const sid = panel.value?.sessionId
     if (!sid || !/^[A-Za-z]:\\$/.test(dir)) return
@@ -256,11 +279,44 @@ const localListing = useFileListing({
 const {
   cwd, files: remoteFiles, loading: loadingRemote,
   onRefresh: onRefreshRemote, onNavigate: onRemoteNavigate, onCancelLoad: onCancelLoadRemote,
+  canBack: remoteCanBack, canForward: remoteCanForward,
+  onBack: onRemoteBack, onForward: onRemoteForward, onUp: onRemoteUp,
 } = remoteListing
 const {
   cwd: localCwd, files: localFiles, loading: loadingLocal,
   onRefresh: onRefreshLocal, onNavigate: onLocalNavigate, onCancelLoad: onCancelLoadLocal,
+  canBack: localCanBack, canForward: localCanForward,
+  onBack: onLocalBack, onForward: onLocalForward, onUp: onLocalUp,
 } = localListing
+
+// Auto-reconnect when a remote listing/navigation hits a dead session (used to
+// toast "connection lost" on every refresh with no way back except closing the
+// tab). A disconnect is detected either from the error wording or from the
+// session's own status; then the shared panel-reconnect flow (same one the tab
+// right-click 「重连」 uses) brings up a fresh session and the listing reloads
+// once. Returns true so the generic error toast is suppressed whenever we took
+// over — including when the reconnect itself failed (it reports its own error).
+async function onRemoteListError(err: string): Promise<boolean> {
+  const panel = panelStore.getPanel(props.panelId)
+  if (!panel?.config) return false
+  let connected = false
+  try {
+    const sessions = await ListSessions()
+    connected = sessions.find(s => s.id === panel.sessionId)?.status === 'connected'
+  } catch { /* status unknown — treat as disconnected */ }
+  if (connected && !isConnectionLostError(err)) return false
+  if (!isPanelReconnecting(props.panelId)) {
+    msg.warning(t('sftp.reconnecting'))
+  }
+  try {
+    const newId = await reconnectFileTransferPanel(props.panelId)
+    if (newId) onRefreshRemote()
+    else msg.error(t('tab.reconnectFailed'))
+  } catch (e: any) {
+    msg.error(`${t('tab.reconnectFailed')}: ${e?.message || String(e)}`)
+  }
+  return true
+}
 
 const remotePanel = useFilePanel({
   sid: () => panel.value?.sessionId,
@@ -273,7 +329,11 @@ const remotePanel = useFilePanel({
   transferTasks: () => transferTasks,
   openEditor: (path, title) => fileEditorRef.value?.open(path, title, 'remote') ?? Promise.resolve(),
   openExternal: (sid, path, cmd) => SftpOpenExternalEditor(sid, path, cmd),
+  openWithSystem: (sid, path) => SftpOpenWithSystem(sid, path),
   bookmarkMode: 'remote',
+  // Upload/download pickers open at the local pane's directory, so the two
+  // halves of the tab stay in step.
+  localCwd: () => localListing.cwd.value,
 })
 const localPanel = useFilePanel({
   sid: () => panel.value?.sessionId,
@@ -285,16 +345,17 @@ const localPanel = useFilePanel({
   dialogs: fileDialogs,
   transferTasks: () => transferTasks,
   openEditor: (path, title) => fileEditorRef.value?.open(path, title, 'local') ?? Promise.resolve(),
-  openExternal: (sid, path, cmd) => OpenExternalEditorLocal(path, cmd),
+  openExternal: (_sid, path, cmd) => OpenExternalEditorLocal(path, cmd),
+  openWithSystem: (_sid, path) => OpenWithSystemLocal(path),
   bookmarkMode: 'local',
 })
 const {
   clipboard, cutItemNames, clipboardCount, pasteLoading: pasteLoadingRemote,
   onCopyToClipboard, onCutToClipboard, onClearClipboard, onCancelPaste, onPaste,
-  onRename, onDelete, onMkdir, onNewFile,
+  onRename, onDelete, onMkdir, onNewFile, onSymlink,
   onUpload, onDownloadTo,
-  onEditFile, onEditExternal,
-  onCancelTransfer, onPauseTransfer, onResumeTransfer, clearFinishedTransfers,
+  onEditFile, onEditExternal, onOpenWithSystem,
+  onCancelTransfer, onPauseTransfer, onResumeTransfer, onRetryTransfer, clearFinishedTransfers,
   onSaveBookmark, onRemoveBookmark,
   uploadPaths,
 } = remotePanel
@@ -305,7 +366,7 @@ const {
   onClearClipboard: onLocalClearClipboard, onCancelPaste: onLocalCancelPaste,
   onPaste: onLocalPaste, onRename: onLocalRename, onDelete: onLocalDelete,
   onMkdir: onLocalMkdir, onNewFile: onLocalNewFile,
-  onEditFile: onLocalEditFile, onEditExternal: onLocalEditExternal,
+  onEditFile: onLocalEditFile, onEditExternal: onLocalEditExternal, onOpenWithSystem: onLocalOpenWithSystem,
   onSaveBookmark: onLocalSaveBookmark, onRemoveBookmark: onLocalRemoveBookmark,
 } = localPanel
 
@@ -314,14 +375,29 @@ let unsubscribeStatus: (() => void) | null = null
 let unsubscribeExt: (() => void) | null = null
 let initialNavDone = false
 
+// On disconnect/error nothing will ever complete the in-flight transfers, so
+// mark them (and their running files) failed here — otherwise they would sit
+// as "running" forever. Failed tasks become retryable in the transfer panel.
+function markTransferTasksDisconnected() {
+  for (const t of transferTasks) {
+    if (t.status === 'running' || t.status === 'paused') {
+      t.status = 'error'
+      t.files.forEach(f => { if (f.status === 'running') f.status = 'failed' })
+    }
+  }
+}
+
 onMounted(async () => {
-  unsubscribeStatus =Events.On('session:status', (ev) => { const payload: { id: string; status: string } = ev.data; 
+  unsubscribeStatus =Events.On('session:status', (ev) => { const payload: { id: string; status: string } = ev.data;
     if (payload.id === panel.value?.sessionId) {
       if (payload.status === 'connected') {
         onRefreshLocal()
         onRefreshRemote().then(() => doInitialAutoNav())
       } else if (payload.status === 'error') {
+        markTransferTasksDisconnected()
         msg.error(t('sftp.connectError'))
+      } else if (payload.status === 'disconnected') {
+        markTransferTasksDisconnected()
       }
     }
    })
@@ -335,9 +411,6 @@ onMounted(async () => {
       return
     }
   })
-
-  // Transfer-task bookkeeping is shared with the file sidebar.
-  transferEvents.bind()
 
   // External-editor status events from the backend (started / uploaded / closed)
   unsubscribeExt = Events.On('sftp:extedit', (ev) => {
@@ -362,6 +435,35 @@ watch(() => panel.value?.sessionId, async (newId, oldId) => {
   }
 }, { immediate: true })
 
+// Transfer panel visibility: hidden by default; a NEW task id auto-pops it
+// (a manual collapse only hides the panel until the next task starts). The
+// persisted flag remembers the last visibility across restarts but never
+// suppresses the auto-pop.
+watchNewTransferTasks(
+  () => transferTasks,
+  () => { settingsStore.sftpTransferPanelVisible = true },
+)
+
+// Transfer events are routed app-level by transferTaskCenter keyed by
+// session id, so this tab's list stays current while another tab is
+// active. Re-connects re-route through this watch (the panel's session
+// id changes); the done-refresh is suppressed once the tab is gone.
+let transferRoutingDisposed = false
+// Captured non-reactively so unmount cleanup works even after the panel is
+// removed from panelStore (KeepAlive can defer onUnmounted until long after
+// closeTab, when panel.value is already undefined).
+let boundSessionId: string | null = null
+watch(() => panel.value?.sessionId, (sid, oldSid) => {
+  if (oldSid && oldSid !== sid) unregisterTransferRoute(oldSid)
+  if (!sid) return
+  registerTransferRoute(sid, props.panelId, (status, type) => {
+    if (transferRoutingDisposed || status !== 'done') return
+    if (type === 'download') onRefreshLocal()
+    else onRefreshRemote()
+  })
+  boundSessionId = sid
+}, { immediate: true })
+
 // A fast-connecting session (e.g. S3) can emit session:status 'connected' before
 // this panel binds its sessionId, so the connected-event handler and a mount-time
 // probe that runs while sid is still undefined both miss it. Once we know the id,
@@ -383,6 +485,10 @@ async function probeConnectAndLoad() {
 }
 
 onUnmounted(() => {
+  transferRoutingDisposed = true
+  const sid = boundSessionId
+  if (sid) unregisterTransferRoute(sid)
+  panelStore.removeTransferTasks(props.panelId)
   unsubscribe?.()
   unsubscribeStatus?.()
   unsubscribeExt?.()
@@ -431,49 +537,27 @@ async function doInitialAutoNav() {
   }
 }
 
-async function onSendToRemote(items: FileItem[]) {
-  const sid = panel.value?.sessionId
-  if (!sid) return
-
-  const fileNames = items.filter(i => i.name !== '..').map(i => i.name)
-  const action = await resolveConflicts(fileNames, remoteFiles.value.map(f => f.name))
-  if (action === 'cancel') return
-
-  const existingNames = remoteFiles.value.map(f => f.name)
-  for (const item of items) {
-    if (item.name === '..') continue
-    let resolvedName = item.name
-    if (action === 'rename' && existingNames.includes(item.name)) {
-      resolvedName = autoRename(item.name, existingNames)
-    }
-    existingNames.push(resolvedName)
-    const localPath = joinPath(localCwd.value, item.name)
-    const remotePath = cwd.value + '/' + resolvedName
-    SftpPut(sid, localPath, remotePath, item.isDir)
-  }
-}
-
-async function onSendToLocal(items: FileItem[]) {
-  const sid = panel.value?.sessionId
-  if (!sid) return
-
-  const fileNames = items.filter(i => i.name !== '..').map(i => i.name)
-  const action = await resolveConflicts(fileNames, localFiles.value.map(f => f.name))
-  if (action === 'cancel') return
-
-  const existingNames = localFiles.value.map(f => f.name)
-  for (const item of items) {
-    if (item.name === '..') continue
-    let resolvedName = item.name
-    if (action === 'rename' && existingNames.includes(item.name)) {
-      resolvedName = autoRename(item.name, existingNames)
-    }
-    existingNames.push(resolvedName)
-    const remotePath = joinPath(cwd.value, item.name)
-    const localPath = joinPath(localCwd.value, resolvedName).replace(/\\/g, '/')
-    SftpGet(sid, remotePath, localPath, item.isDir)
-  }
-}
+// Send-to-other (context menu) and cross-pane drag-drop share one transfer
+// implementation per direction (see createSendToOther): the source pane
+// provides the files, the target pane receives them.
+const onSendToRemote = createSendToOther({
+  sid: () => panel.value?.sessionId ?? undefined,
+  direction: 'toRemote',
+  sourceCwd: localListing.cwd,
+  targetCwd: remoteListing.cwd,
+  targetFiles: remoteListing.files,
+  conflicts,
+  ops: remoteFileOps,
+})
+const onSendToLocal = createSendToOther({
+  sid: () => panel.value?.sessionId ?? undefined,
+  direction: 'toLocal',
+  sourceCwd: remoteListing.cwd,
+  targetCwd: localListing.cwd,
+  targetFiles: localListing.files,
+  conflicts,
+  ops: localFileOps,
+})
 
 // OS file drops (resource manager / desktop) arrive via Wails v3's native pipe.
 // Wails forwards the absolute local paths, which we upload directly from disk
@@ -548,24 +632,9 @@ async function onDropLocal(e: DragEvent) {
   if (!data) return
   try {
     const parsed = JSON.parse(data)
-    const items = parsed.items ? parsed.items : (parsed.name ? [{ name: parsed.name, isDir: !!parsed.isDir }] : [])
+    const items: FileItem[] = parsed.items ? parsed.items : (parsed.name ? [{ name: parsed.name, isDir: !!parsed.isDir }] : [])
     if (items.length === 0 || parsed.mode !== 'remote') return
-    const sid = panel.value?.sessionId
-    if (!sid) return
-    const fileNames = items.map((i: any) => i.name)
-    const action = await resolveConflicts(fileNames, localFiles.value.map(f => f.name))
-    if (action === 'cancel') return
-    const existingNames = localFiles.value.map(f => f.name)
-    for (const item of items) {
-      let resolvedName = item.name
-      if (action === 'rename' && existingNames.includes(item.name)) {
-        resolvedName = autoRename(item.name, existingNames)
-      }
-      existingNames.push(resolvedName)
-      const remotePath = joinPath(cwd.value, item.name)
-      const localPath = joinPath(localCwd.value, resolvedName).replace(/\\/g, '/')
-      SftpGet(sid, remotePath, localPath, item.isDir)
-    }
+    await onSendToLocal(items)
   } catch (e) { console.error('onDropLocal:', e) }
 }
 
@@ -586,22 +655,9 @@ async function onDropRemote(e: DragEvent) {
   if (!data) return
   try {
     const parsed = JSON.parse(data)
-    const items = parsed.items ? parsed.items : (parsed.name ? [{ name: parsed.name, isDir: !!parsed.isDir }] : [])
+    const items: FileItem[] = parsed.items ? parsed.items : (parsed.name ? [{ name: parsed.name, isDir: !!parsed.isDir }] : [])
     if (items.length === 0 || parsed.mode !== 'local') return
-    const fileNames = items.map((i: any) => i.name)
-    const action = await resolveConflicts(fileNames, remoteFiles.value.map(f => f.name))
-    if (action === 'cancel') return
-    const existingNames = remoteFiles.value.map(f => f.name)
-    for (const item of items) {
-      let resolvedName = item.name
-      if (action === 'rename' && existingNames.includes(item.name)) {
-        resolvedName = autoRename(item.name, existingNames)
-      }
-      existingNames.push(resolvedName)
-      const localPath = joinPath(localCwd.value, item.name)
-      const remotePath = cwd.value + '/' + resolvedName
-      SftpPut(panel.value?.sessionId!, localPath, remotePath, item.isDir)
-    }
+    await onSendToRemote(items)
   } catch (e) { console.error('onDropRemote:', e) }
 }
 </script>
@@ -640,10 +696,10 @@ async function onDropRemote(e: DragEvent) {
   pointer-events: none;
 }
 .drop-overlay span {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-primary);
-  padding: 12px 24px;
-  border: 2px dashed var(--border-hover);
+  padding: 0.75rem 1.5rem;
+  border: 0.125rem dashed var(--border-hover);
   border-radius: var(--radius-md);
 }
 

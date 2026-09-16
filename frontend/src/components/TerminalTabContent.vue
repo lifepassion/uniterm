@@ -185,7 +185,7 @@ function onDrop(e: DragEvent) {
   justify-content: center;
   height: 100%;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .drop-zone-overlay {

@@ -26,3 +26,14 @@ type ImportResult struct {
 	Connections []session.ConnectionConfig `json:"connections"`
 	Warnings    []string                   `json:"warnings"`
 }
+
+// connTarget is the direct mapping from an external tool's connection kind
+// onto uniterm's model: the final config type, the dbType discriminator
+// (matching the field name on session.ConnectionConfig; empty for standalone
+// types like redis/mongodb/elasticsearch, which carry their kind in Type)
+// and the default port for sources that omit one.
+type connTarget struct {
+	Type   string
+	DBType string
+	Port   int
+}

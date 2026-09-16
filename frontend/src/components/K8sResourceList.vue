@@ -26,7 +26,7 @@
       v-if="frame.kind === 'custom'"
       :data="crdFiltered"
       size="small"
-      height="calc(100% - 40px)"
+      height="calc(100% - 2.5rem)"
       class="k8s-list-table"
       border
       v-loading="isLoading"
@@ -37,13 +37,13 @@
         <template #default="{ row }">{{ evalJsonPath(row, pc.jsonPath) }}</template>
       </el-table-column>
       <el-table-column label="Age"><template #default="{ row }">{{ age(row.metadata?.creationTimestamp) }}</template></el-table-column>
-      <el-table-column :label="t('k8s.actions')" width="66" fixed="right" class-name="k8s-action-cell">
+      <el-table-column :label="t('k8s.actions')" :width="uiPx(66)" fixed="right" class-name="k8s-action-cell">
         <template #default="{ row }">
           <button class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionEdit')" @click.stop="emit('open-yaml', row)">
-            <Pencil :size="14" />
+            <Pencil :size="'0.875rem'" />
           </button>
           <button class="btn btn-ghost btn-icon btn-sm danger" :title="t('k8s.actionDelete')" @click.stop="onDeleteCr(row)">
-            <Trash2 :size="14" />
+            <Trash2 :size="'0.875rem'" />
           </button>
         </template>
       </el-table-column>
@@ -54,7 +54,7 @@
       v-else
       :data="filtered"
       size="small"
-      height="calc(100% - 40px)"
+      height="calc(100% - 2.5rem)"
       class="k8s-list-table"
       border
       v-loading="isLoading"
@@ -65,7 +65,7 @@
         v-for="col in desc?.columns || []"
         :key="col.header"
         :label="col.header"
-        :width="col.width"
+        :width="uiPx(col.width)"
         sortable
         show-overflow-tooltip
         :sort-method="(a, b) => compareCells(col, a, b)"
@@ -75,34 +75,34 @@
         <template #default="{ row }">{{ cellText(col.value(row, usageOf(row))) }}</template>
       </el-table-column>
 
-      <el-table-column v-if="actionColWidth" :label="t('k8s.actions')" :width="actionColWidth" fixed="right" class-name="k8s-action-cell">
+      <el-table-column v-if="actionColWidth" :label="t('k8s.actions')" :width="uiPx(actionColWidth)" fixed="right" class-name="k8s-action-cell">
         <template #default="{ row }">
           <button v-if="has('detail')" class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionEdit')" @click.stop="emit('open-yaml', row)">
-            <Pencil :size="14" />
+            <Pencil :size="'0.875rem'" />
           </button>
           <button v-if="has('logs')" class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionLogs')" @click.stop="emit('open-logs', row)">
-            <ScrollText :size="14" />
+            <ScrollText :size="'0.875rem'" />
           </button>
           <button v-if="has('terminal')" class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionTerminal')" @click.stop="emit('open-terminal', row)">
-            <SquareTerminal :size="14" />
+            <SquareTerminal :size="'0.875rem'" />
           </button>
           <button v-if="has('viewPods')" class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionViewPods')" @click.stop="onViewPods(row)">
-            <Box :size="14" />
+            <Box :size="'0.875rem'" />
           </button>
           <button v-if="has('restart')" class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionRestart')" @click.stop="onCommand('restart', row)">
-            <Repeat :size="14" />
+            <Repeat :size="'0.875rem'" />
           </button>
           <button v-if="has('scale')" class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionScale')" @click.stop="onCommand('scale', row)">
-            <ArrowUpDown :size="14" />
+            <ArrowUpDown :size="'0.875rem'" />
           </button>
           <button v-if="has('cordon')" class="btn btn-ghost btn-icon btn-sm" :title="row.spec?.unschedulable ? t('k8s.actionUncordon') : t('k8s.actionCordon')" @click.stop="onCommand('cordon', row)">
-            <component :is="row.spec?.unschedulable ? CircleCheck : Ban" :size="14" />
+            <component :is="row.spec?.unschedulable ? CircleCheck : Ban" :size="'0.875rem'" />
           </button>
           <button v-if="has('drain')" class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionDrain')" @click.stop="onCommand('drain', row)">
-            <CirclePower :size="14" />
+            <CirclePower :size="'0.875rem'" />
           </button>
           <button v-if="has('delete')" class="btn btn-ghost btn-icon btn-sm danger" :title="t('k8s.actionDelete')" @click.stop="onCommand('delete', row)">
-            <Trash2 :size="14" />
+            <Trash2 :size="'0.875rem'" />
           </button>
         </template>
       </el-table-column>
@@ -121,6 +121,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount, h } from 'vue'
+import { uiPx } from '../utils/uiScale'
 import {
   ElTable, ElTableColumn, ElInput, ElButton,
   ElMessageBox, ElMessage, ElCheckbox,
@@ -335,7 +336,7 @@ async function confirmDelete(kind: string, name: string): Promise<boolean> {
     confirmButtonText: t('common.confirm'),
     cancelButtonText: t('common.cancel'),
     message: () => h('div', [
-      h('p', { style: 'margin: 0 0 8px' }, t('k8s.deleteConfirm', { kind, name })),
+      h('p', { style: 'margin: 0 0 0.5rem' }, t('k8s.deleteConfirm', { kind, name })),
       h(ElCheckbox, {
         modelValue: force.value,
         'onUpdate:modelValue': (v: any) => { force.value = !!v },
@@ -533,18 +534,18 @@ onBeforeUnmount(() => {
 .k8s-list-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
   border-bottom: 1px solid var(--el-border-color-lighter, #333);
   flex-shrink: 0;
 }
 .k8s-filter {
-  width: 220px;
+  width: 13.75rem;
 }
 .k8s-list-title {
   margin-left: auto;
   color: var(--text-secondary, #888);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .k8s-list-table {
   flex: 1;
@@ -564,19 +565,19 @@ onBeforeUnmount(() => {
   background: rgba(245, 108, 108, 0.12);
   color: var(--el-color-danger, #f56c6c);
 }
-/* Action-column cell: tighter cell padding + fixed 4px gap between the
-   project-standard .btn-icon buttons (24px square, from style.css .btn). */
+/* Action-column cell: tighter cell padding + fixed 0.25rem gap between the
+   project-standard .btn-icon buttons (1.5rem square, from style.css .btn). */
 .k8s-list-table :deep(.k8s-action-cell .cell) {
-  padding: 0 4px;
+  padding: 0 0.25rem;
   white-space: nowrap;
 }
 .k8s-list-table :deep(.k8s-action-cell .btn-icon + .btn-icon) {
-  margin-left: 4px;
+  margin-left: 0.25rem;
 }
 .k8s-list-err {
   color: var(--el-color-danger, #f56);
-  padding: 8px 12px;
-  font-size: 12px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
   border-bottom: 1px solid var(--el-border-color-lighter, #333);
 }
 </style>

@@ -8,6 +8,7 @@
       :style="menuStyle"
       @mouseover="onInnerMouseOver"
       @mouseleave="submenu.active = ''"
+      @contextmenu.stop
     >
       <slot :current="current" />
     </div>
@@ -107,7 +108,7 @@ const props = defineProps<{
   visible: boolean
   align?: 'start' | 'end'
   /** Extra class(es) merged onto the teleported root; lets hosts keep
-   *  per-menu skin modifiers (e.g. `right-shortcuts` for shortcut hints). */
+   *  per-menu skin modifiers. */
   rootClass?: string
 }>()
 const emit = defineEmits<{
@@ -279,19 +280,9 @@ watch(() => props.visible, (v) => {
   /* Auto-width: the menu hugs its widest row, so no per-menu min-width tuning
      is needed. min-width only guarantees a floor for single-word menus. */
   width: max-content;
-  min-width: 140px;
-  padding: 4px;
-  backdrop-filter: blur(8px);
-}
-/* Shortcut hints right-aligned: turns affected rows into flex so the hint
-   ("Ctrl+C" etc.) hugs the right edge instead of sitting after the label.
-   Apply on the container; rows without a hint are single children and are
-   unaffected (space-between no-ops on one child). */
-.conn-context-menu.right-shortcuts .menu-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
+  min-width: 8.75rem;
+  padding: 0.25rem;
+  backdrop-filter: blur(0.5rem);
 }
 .conn-context-menu.anchored {
   position: absolute;
@@ -308,8 +299,8 @@ watch(() => props.visible, (v) => {
   /* intentionally empty — kept for the descendant selector below */
 }
 .conn-context-menu .menu-item {
-  padding: 7px 14px;
-  font-size: 12px;
+  padding: 0.4375rem 0.875rem;
+  font-size: 0.75rem;
   font-family: var(--font-ui);
   color: var(--text-secondary);
   cursor: pointer;
@@ -343,7 +334,7 @@ watch(() => props.visible, (v) => {
 .conn-context-menu .menu-item.iconic {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
 }
 .conn-context-menu .menu-item.mono {
   font-family: var(--font-mono);
@@ -354,21 +345,21 @@ watch(() => props.visible, (v) => {
 .conn-context-menu .menu-divider {
   height: 1px;
   background: var(--border-subtle);
-  margin: 4px 6px;
+  margin: 0.25rem 0.375rem;
 }
 /* Trailing chevron on a submenu-wrap row (settings + type-filter menus).
    margin-left:auto pushes it to the right edge of the flex .iconic row. */
 .conn-context-menu .menu-icon-trailing {
   margin-left: auto;
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-tertiary);
 }
 /* Nested flyout / submenu surface — inherits the same surface skin. Position
    it relative to a .menu-item.submenu-wrap; the skin and rows reuse everything
    above. Flyout direction is decided per-position by Menu.vue against the
    window edges (`mirror-left` flips it leftward when the right side can't fit
-   it). Hosts just write `menu-submenu` and never pick a side. Each overlaps 3px
+   it). Hosts just write `menu-submenu` and never pick a side. Each overlaps 0.1875rem
    onto its parent row so the parent→flyout mouse path never crosses a dead gap
    (which would close the flyout). */
 .conn-context-menu .menu-submenu {
@@ -378,22 +369,22 @@ watch(() => props.visible, (v) => {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
-  min-width: 140px;
-  padding: 4px;
-  backdrop-filter: blur(8px);
+  min-width: 8.75rem;
+  padding: 0.25rem;
+  backdrop-filter: blur(0.5rem);
   /* default: fly right of the parent row */
-  left: calc(100% - 3px);
-  top: -4px;
+  left: calc(100% - 0.1875rem);
+  top: -0.25rem;
 }
 /* mirror-left container → submenus fly left */
 .conn-context-menu.mirror-left .menu-submenu {
   left: auto;
-  right: calc(100% - 3px);
-  top: -4px;
+  right: calc(100% - 0.1875rem);
+  top: -0.25rem;
 }
 .conn-context-menu .menu-submenu .menu-item {
-  padding: 7px 12px;
-  font-size: 12px;
+  padding: 0.4375rem 0.75rem;
+  font-size: 0.75rem;
   font-family: var(--font-ui);
   color: var(--text-secondary);
   cursor: pointer;

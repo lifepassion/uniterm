@@ -1,13 +1,26 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 
 // EventsOn is called at module load; stub it so importing the store is safe.
-import { vi } from 'vitest'
+// The session:data handler is captured so cancel-window tests can drive the
+// module-level listener directly.
+const { runtimeState } = vi.hoisted(() => ({
+  runtimeState: {
+    dataHandler: null as null | ((ev: any) => void),
+  },
+}))
 vi.mock('@wailsio/runtime', () => ({
-  Events: { On: vi.fn(() => () => {}), Off: vi.fn() },
+  Events: {
+    On: vi.fn((name: string, handler: (ev: any) => void) => {
+      if (name === 'session:data') runtimeState.dataHandler = handler
+      return () => { if (name === 'session:data') runtimeState.dataHandler = null }
+    }),
+    Off: vi.fn(),
+  },
 }))
 
 import { useSessionStore } from './sessionStore'
+import { useZmodemStore } from './zmodemStore'
 
 const MAX_CHUNKS = 2000
 const TRIM_TO = 1000
@@ -135,5 +148,55 @@ describe('sessionStore replay tracking', () => {
     const replayed = store.getDataFromChunk(id, cursor)
     expect(replayed.length).toBeGreaterThan(0)
     expect(replayed.includes(`post-199-`)).toBe(true)
+  })
+})
+
+describe('sessionStore zmodem cancel window', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  function emitData(id: string, data: string) {
+    runtimeState.dataHandler?.({ data: { id, data } })
+  }
+
+  it('stores chunks outside the cancel window', () => {
+    const sessions = useSessionStore()
+    const zmodem = useZmodemStore()
+    zmodem.setCancelUntil('s-outside', Date.now() - 1)
+
+    emitData('s-outside', 'hello')
+    const total = sessions.getChunkCount('s-outside')
+    expect(total).toBe(1)
+    expect(sessions.getDataFromChunk('s-outside', 0)).toBe('hello')
+  })
+
+  it('drops chunks arriving inside the zmodem cancel window', () => {
+    const sessions = useSessionStore()
+    const zmodem = useZmodemStore()
+    // Residual binary garbage from an aborted sz transfer lands within the
+    // 2s cancel window; it must never enter the replay buffer, or tab-switch
+    // gap replay writes it straight into xterm.
+    zmodem.setCancelUntil('s-window', Date.now() + 2000)
+
+    emitData('s-window', '\x18\x18garbage')
+    emitData('s-window', '\x18more')
+
+    expect(sessions.getChunkCount('s-window')).toBe(0)
+    expect(sessions.getDataFromChunk('s-window', 0)).toBe('')
+  })
+
+  it('stores chunks again once the cancel window expires', () => {
+    const sessions = useSessionStore()
+    const zmodem = useZmodemStore()
+    zmodem.setCancelUntil('s-expire', Date.now() + 2000)
+
+    emitData('s-expire', '\x18garbage')
+    expect(sessions.getChunkCount('s-expire')).toBe(0)
+
+    zmodem.setCancelUntil('s-expire', Date.now() - 1)
+    emitData('s-expire', 'prompt')
+    expect(sessions.getChunkCount('s-expire')).toBe(1)
+    expect(sessions.getDataFromChunk('s-expire', 0)).toBe('prompt')
   })
 })

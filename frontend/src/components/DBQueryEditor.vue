@@ -16,15 +16,15 @@
           @keydown.enter="generateSQL"
         />
         <button class="btn btn-default btn-sm" @click="generateSQL" :disabled="aiGenerating || !nlInput.trim()">
-          <Sparkles :size="14" :class="{ 'ai-pulse': aiGenerating }" />
+          <Sparkles :size="'0.875rem'" :class="{ 'ai-pulse': aiGenerating }" />
           {{ aiGenerating ? '...' : 'AI' }}
         </button>
         <button class="btn btn-default btn-sm" @click="historyOpen = !historyOpen">
-          <History :size="14" />
+          <History :size="'0.875rem'" />
           {{ t('db.queryHistory') }}
         </button>
         <button class="btn btn-ghost btn-icon btn-sm" :title="t('db.runSqlFile')" @click="onOpenScriptFile">
-          <FolderOpen :size="14" />
+          <FolderOpen :size="'0.875rem'" />
         </button>
         <button class="btn btn-primary btn-sm" title="Ctrl+Enter" @click="onExecute">{{ t('db.execute') }}</button>
       </div>
@@ -84,14 +84,14 @@
             v-if="tableName && !isView"
             class="btn btn-default btn-sm"
             @click="startInsertRow"
-          ><Plus :size="14" /> {{ t('db.insertRow') }}</button>
+          ><Plus :size="'0.875rem'" /> {{ t('db.insertRow') }}</button>
           <button
             ref="exportBtnRef"
             class="btn btn-ghost btn-icon btn-sm"
             :title="t('db.exportResults')"
             @click.stop="exportMenuRef?.toggle($event.currentTarget)"
           >
-            <Download :size="14" />
+            <Download :size="'0.875rem'" />
           </button>
           <Menu
             ref="exportMenuRef"
@@ -153,7 +153,7 @@
       <el-dialog
         v-model="insertingRow"
         :title="t('db.insertRow')"
-        width="640px"
+        width="40rem"
         append-to-body
         destroy-on-close
       >
@@ -176,7 +176,7 @@
       <el-dialog
         v-model="editingRow"
         :title="t('common.edit')"
-        width="640px"
+        width="40rem"
         append-to-body
         destroy-on-close
       >
@@ -1014,12 +1014,12 @@ function onEditRowCancel() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 0.75rem;
 }
 .spinner {
-  width: 28px;
-  height: 28px;
-  border: 3px solid var(--border-subtle);
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 0.1875rem solid var(--border-subtle);
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -1029,14 +1029,14 @@ function onEditRowCancel() {
 }
 .loading-text {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary);
 }
 .editor-top {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  padding: 8px 8px 0;
+  padding: 0.5rem 0.5rem 0;
   min-height: 0;
   min-width: 0;
   width: 100%;
@@ -1044,15 +1044,15 @@ function onEditRowCancel() {
 }
 .editor-toolbar {
   display: flex;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: 0.375rem;
+  margin-bottom: 0.375rem;
   align-items: center;
   flex-shrink: 0;
 }
 .sql-editor-wrap {
   position: relative;
   flex: 1 1 auto;
-  min-height: 80px;
+  min-height: 5rem;
   min-width: 0;
   width: 100%;
   align-self: stretch;
@@ -1061,13 +1061,13 @@ function onEditRowCancel() {
 .nl-input {
   flex: 1;
   min-width: 0;
-  padding: 4px 8px;
+  padding: 0.25rem 0.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   outline: none;
 }
 .nl-input:focus { border-color: var(--accent); }
@@ -1078,33 +1078,33 @@ function onEditRowCancel() {
   50% { opacity: 0.3; }
 }
 .history-panel {
-  max-height: 140px;
+  max-height: 8.75rem;
   overflow: auto;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-base);
-  margin-bottom: 6px;
+  margin-bottom: 0.375rem;
   flex-shrink: 0;
 }
 .history-empty {
-  padding: 8px 10px;
-  font-size: 12px;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 .history-item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
   width: 100%;
   text-align: left;
-  padding: 6px 10px;
+  padding: 0.375rem 0.625rem;
   border: none;
   border-bottom: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-primary);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .history-item:hover { background: var(--bg-hover); }
 .history-sql {
@@ -1114,12 +1114,12 @@ function onEditRowCancel() {
 }
 .history-meta {
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
 }
 .history-err { color: var(--error); }
 .editor-resizer {
-  height: 4px;
+  height: 0.25rem;
   cursor: row-resize;
   background: transparent;
   flex-shrink: 0;
@@ -1127,7 +1127,7 @@ function onEditRowCancel() {
 .editor-resizer:hover { background: var(--border-subtle); }
 .editor-bottom {
   flex: 1;
-  padding: 0 8px 8px;
+  padding: 0 0.5rem 0.5rem;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1135,29 +1135,29 @@ function onEditRowCancel() {
 }
 .error-msg {
   color: var(--error);
-  padding: 8px;
+  padding: 0.5rem;
   background: var(--error-subtle);
   border-radius: var(--radius-sm);
-  margin-bottom: 8px;
+  margin-bottom: 0.5rem;
   user-select: text;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 0.8125rem;
   flex-shrink: 0;
 }
 .result-info {
-  padding: 4px 0;
+  padding: 0.25rem 0;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
   flex-shrink: 0;
 }
 .script-result {
-  padding: 6px 8px;
-  margin-bottom: 8px;
+  padding: 0.375rem 0.5rem;
+  margin-bottom: 0.5rem;
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
   flex-shrink: 0;
 }
@@ -1166,45 +1166,45 @@ function onEditRowCancel() {
   color: var(--error);
 }
 .script-ok { color: var(--text-primary); }
-.script-affected { margin-left: 12px; }
+.script-affected { margin-left: 0.75rem; }
 .script-error-head { font-weight: 600; }
-.script-error-detail { margin-top: 4px; font-family: var(--font-mono); font-size: 12px; word-break: break-word; }
+.script-error-detail { margin-top: 0.25rem; font-family: var(--font-mono); font-size: 0.75rem; word-break: break-word; }
 .script-error-sql {
-  margin: 4px 0 0;
-  padding: 6px;
+  margin: 0.25rem 0 0;
+  padding: 0.375rem;
   background: var(--bg-base);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-primary);
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 160px;
+  max-height: 10rem;
   overflow: auto;
 }
 .result-duration { color: var(--text-muted); }
 .result-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 0;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
   flex-shrink: 0;
 }
 .result-filter {
-  width: 200px;
-  padding: 3px 8px;
+  width: 12.5rem;
+  padding: 0.1875rem 0.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-base);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 0.75rem;
   outline: none;
 }
 .result-filter:focus { border-color: var(--accent); }
 .result-toolbar-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.625rem;
   margin-left: auto;
   min-width: 0;
 }
@@ -1213,33 +1213,33 @@ function onEditRowCancel() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 4px 0;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
   flex-shrink: 0;
 }
 .result-count {
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   white-space: nowrap;
 }
 .save-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 0;
+  gap: 0.5rem;
+  padding: 0.375rem 0;
   flex-shrink: 0;
 }
 .save-hint {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 0.75rem;
   margin-right: auto;
 }
 .insert-row-form {
   border: 1px solid var(--accent);
   border-radius: var(--radius-sm);
-  padding: 8px;
-  margin-top: 4px;
+  padding: 0.5rem;
+  margin-top: 0.25rem;
   flex-shrink: 0;
   overflow: auto;
   max-height: 40%;
@@ -1252,16 +1252,16 @@ function onEditRowCancel() {
 }
 .row-form-row {
   display: grid;
-  grid-template-columns: 160px 90px minmax(0, 1fr) 108px;
-  gap: 10px;
+  grid-template-columns: 10rem 5.625rem minmax(0, 1fr) 6.75rem;
+  gap: 0.625rem;
   align-items: center;
-  padding: 5px 0;
+  padding: 0.3125rem 0;
   border-bottom: 1px solid var(--border-subtle);
 }
 .row-form-row:last-child { border-bottom: none; }
 .field-name {
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -1270,7 +1270,7 @@ function onEditRowCancel() {
 }
 .field-type {
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1280,8 +1280,8 @@ function onEditRowCancel() {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 4px;
-  font-size: 10px;
+  gap: 0.25rem;
+  font-size: 0.625rem;
   cursor: pointer;
   color: var(--text-muted);
   white-space: nowrap;
@@ -1290,11 +1290,11 @@ function onEditRowCancel() {
 .field-input {
   width: 100%;
   box-sizing: border-box;
-  padding: 4px 8px;
+  padding: 0.25rem 0.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   background: var(--bg-base);
   color: var(--text-primary);
 }

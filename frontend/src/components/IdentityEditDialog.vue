@@ -3,18 +3,18 @@
     append-to-body
     :model-value="visible"
     :title="identity ? t('settings.editIdentity') : t('settings.addIdentity')"
-    width="480px"
+    width="30rem"
     @update:model-value="v => emit('update:visible', v)"
   >
-    <el-form label-width="90px">
+    <el-form label-width="5.625rem">
       <el-form-item :label="t('conn.name')">
         <el-input v-model="form.name" :placeholder="t('conn.namePlaceholder')" />
       </el-form-item>
       <el-form-item :label="t('conn.authType')">
         <el-radio-group v-model="form.authType">
-          <el-radio-button label="password">{{ t('conn.password') }}</el-radio-button>
-          <el-radio-button label="key">{{ t('conn.keyPath') }}</el-radio-button>
-          <el-radio-button label="keyText">{{ t('conn.keyText') }}</el-radio-button>
+          <el-radio-button value="password">{{ t('conn.password') }}</el-radio-button>
+          <el-radio-button value="key">{{ t('conn.keyPath') }}</el-radio-button>
+          <el-radio-button value="keyText">{{ t('conn.keyText') }}</el-radio-button>
         </el-radio-group>
       </el-form-item>
       <el-form-item :label="t('conn.user')">
@@ -29,7 +29,7 @@
             <template #append>
               <el-tooltip :content="t('conn.selectKeyFile')" placement="top">
                 <el-button :aria-label="t('conn.selectKeyFile')" @click="selectKeyFile">
-                  <el-icon><FolderOpen :size="16" /></el-icon>
+                  <el-icon><FolderOpen :size="'1rem'" /></el-icon>
                 </el-button>
               </el-tooltip>
             </template>
@@ -43,8 +43,8 @@
         <el-form-item :label="t('conn.keyContent')">
           <template v-if="!keyContentRevealed">
             <el-button size="small" @click="keyContentRevealed = true">
-              <el-icon><Eye :size="14" /></el-icon>
-              <span style="margin-left: 4px">{{ t('conn.keyTextReveal') }}</span>
+              <el-icon><Eye :size="'0.875rem'" /></el-icon>
+              <span style="margin-left: 0.25rem">{{ t('conn.keyTextReveal') }}</span>
             </el-button>
           </template>
           <template v-else>
@@ -58,12 +58,12 @@
             />
             <div class="key-content-actions">
               <el-button size="small" @click="keyContentRevealed = false">
-                <el-icon><EyeOff :size="14" /></el-icon>
-                <span style="margin-left: 4px">{{ t('conn.keyTextHide') }}</span>
+                <el-icon><EyeOff :size="'0.875rem'" /></el-icon>
+                <span style="margin-left: 0.25rem">{{ t('conn.keyTextHide') }}</span>
               </el-button>
               <el-button size="small" @click="importKeyText">
-                <el-icon><FolderOpen :size="14" /></el-icon>
-                <span style="margin-left: 4px">{{ t('conn.importFromFile') }}</span>
+                <el-icon><FolderOpen :size="'0.875rem'" /></el-icon>
+                <span style="margin-left: 0.25rem">{{ t('conn.importFromFile') }}</span>
               </el-button>
             </div>
           </template>
@@ -130,7 +130,7 @@ watch(() => props.visible, (v) => {
 
 async function selectKeyFile() {
   try {
-    const p = await OpenFileDialog()
+    const p = await OpenFileDialog('~/.ssh')
     if (p) form.keyPath = p
   } catch (e) { console.error('select key file:', e) }
 }
@@ -171,10 +171,10 @@ async function save() {
   font-family: var(--font-mono, ui-monospace, "JetBrains Mono", monospace);
 }
 .key-content-actions {
-  margin-top: 6px;
+  margin-top: 0.375rem;
 }
 .key-content-actions .el-button + .el-button {
-  margin-left: 8px;
+  margin-left: 0.5rem;
 }
 </style>
 

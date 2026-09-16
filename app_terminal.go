@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	goruntime "runtime"
 	"runtime/debug"
 	"strconv"
@@ -59,6 +60,9 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 	if err != nil {
 		log.Writef("[CreateSession] manager.Create failed: %v", err)
 		return nil, err
+	}
+	if setter, ok := s.(interface{ SetLogIdentity(string, string) }); ok {
+		setter.SetLogIdentity(config.Name, config.Host)
 	}
 	log.Writef("[CreateSession] session created, id=%s", s.ID())
 	// Record the LogOnConnect preference synchronously so the frontend's
@@ -551,8 +555,47 @@ func (a *App) SessionEndZmodem(sessionID string) error {
 	if !ok {
 		return fmt.Errorf("session not found: %s", sessionID)
 	}
-	s.SetZmodemMode(false)
+	s.EndZmodem(nil)
 	return nil
+}
+
+// SessionEndZmodemWithTrailing leaves binary mode and emits terminal output
+// that zmodem.js found after the final handshake through the normal text path,
+// decoded as UTF-8 according to the session's configured character encoding.
+func (a *App) SessionEndZmodemWithTrailing(sessionID, base64Data string) error {
+	if a.sessionManager == nil {
+		return fmt.Errorf("session manager not initialized")
+	}
+	s, ok := a.sessionManager.Get(sessionID)
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+	data, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return fmt.Errorf("decode zmodem trailing data: %w", err)
+	}
+	s.EndZmodem(data)
+	return nil
+}
+
+// SessionInjectCwdHook types an OSC-7 cwd reporting hook into the session's
+// already-running shell (SSH only; other session types error). Used by the
+// file sidebar's "follow terminal path" toggle when the connection lacks
+// startup shell integration. The boolean reports whether the hook was
+// injected NOW (false means it was already installed on this session).
+func (a *App) SessionInjectCwdHook(sessionID string) (bool, error) {
+	if a.sessionManager == nil {
+		return false, fmt.Errorf("session manager not initialized")
+	}
+	s, ok := a.sessionManager.Get(sessionID)
+	if !ok {
+		return false, fmt.Errorf("session not found: %s", sessionID)
+	}
+	injector, ok := s.(interface{ InjectCwdHook() (bool, error) })
+	if !ok {
+		return false, fmt.Errorf("session type does not support runtime cwd hook injection")
+	}
+	return injector.InjectCwdHook()
 }
 
 func (a *App) SessionWriteBinary(sessionID string, base64Data string) error {
@@ -645,8 +688,20 @@ func (a *App) AppendFileBase64(path string, base64Data string, offset int64) err
 	} else {
 		flag |= os.O_APPEND
 	}
-
-	f, err := os.OpenFile(path, flag, 0644)
+	// Resolve the final component through os.Root. Root.OpenFile guarantees
+	// that a symlink swapped in after Lstat cannot escape the parent directory.
+	dir, name := filepath.Split(path)
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return fmt.Errorf("open download directory: %w", err)
+	}
+	defer root.Close()
+	if info, statErr := root.Lstat(name); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("refusing to write symbolic link: %s", path)
+	} else if statErr != nil && !os.IsNotExist(statErr) {
+		return fmt.Errorf("inspect file: %w", statErr)
+	}
+	f, err := root.OpenFile(name, flag, 0644)
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
@@ -739,6 +794,70 @@ func (a *App) GetNetworkCards(sessionID string) ([]session.NetCardInfo, error) {
 		return nil, err
 	}
 	return ms.GetNetworkCards()
+}
+
+func (a *App) GetServices(sessionID string) ([]session.ServiceInfo, error) {
+	ms, err := a.getMonitorSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return ms.GetServices()
+}
+
+func (a *App) GetServiceDetail(sessionID string, name string) (map[string]string, error) {
+	ms, err := a.getMonitorSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return ms.GetServiceDetail(name)
+}
+
+func (a *App) GetServiceLogs(sessionID string, name string, lines int) (string, error) {
+	ms, err := a.getMonitorSession(sessionID)
+	if err != nil {
+		return "", err
+	}
+	return ms.GetServiceLogs(name, lines)
+}
+
+func (a *App) ServiceAction(sessionID string, name string, action string) error {
+	ms, err := a.getMonitorSession(sessionID)
+	if err != nil {
+		return err
+	}
+	return ms.ServiceAction(name, action)
+}
+
+func (a *App) GetDevices(sessionID string) ([]session.DeviceInfo, error) {
+	ms, err := a.getMonitorSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return ms.GetDevices()
+}
+
+func (a *App) GetHardwareFru(sessionID string) (*session.FruInfo, error) {
+	ms, err := a.getMonitorSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return ms.GetHardwareFru()
+}
+
+func (a *App) GetHardwareLan(sessionID string) ([]session.LanField, error) {
+	ms, err := a.getMonitorSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return ms.GetHardwareLan()
+}
+
+func (a *App) GetHardwareSensors(sessionID string) (*session.HardwareSensors, error) {
+	ms, err := a.getMonitorSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return ms.GetHardwareSensors()
 }
 
 func (a *App) SaveTerminalHistory(entries []store.HistoryEntry) error {
@@ -919,7 +1038,7 @@ func (a *App) installWriter(sessionID string, logger *session.OutputLogger) {
 // panelLogTitle picks the filename base for a panel's log. Uses the
 // current session's Title if available, otherwise a short synthetic
 // name derived from panelID.
-func (a *App) panelLogTitle(panelID string) (name, protocol string) {
+func (a *App) panelLogTitle(panelID string) (name, host, protocol string) {
 	a.panelLogMu.Lock()
 	var sessionID string
 	for sid, pid := range a.sessionToPanel {
@@ -931,14 +1050,22 @@ func (a *App) panelLogTitle(panelID string) (name, protocol string) {
 	a.panelLogMu.Unlock()
 	if sessionID != "" && a.sessionManager != nil {
 		if s, ok := a.sessionManager.Get(sessionID); ok {
-			return s.Title(), s.Type()
+			name, host = s.Title(), ""
+			if identity, ok := s.(interface{ LogIdentity() (string, string) }); ok {
+				configuredName, configuredHost := identity.LogIdentity()
+				if configuredName != "" {
+					name = configuredName
+				}
+				host = configuredHost
+			}
+			return name, host, s.Type()
 		}
 	}
 	suffix := panelID
 	if len(suffix) > 8 {
 		suffix = suffix[:8]
 	}
-	return "panel_" + suffix, "session"
+	return "panel_" + suffix, "", "session"
 }
 
 // EnableSessionOutputLog starts writing terminal output for the given
@@ -957,11 +1084,14 @@ func (a *App) EnableSessionOutputLog(panelID, dir string) (string, error) {
 	// configured override; if that is also empty, OutputLogger.Enable
 	// will pick the OS default.
 	if dir == "" {
-		a.customLogDirMu.RLock()
+		a.sessionLogSettingsMu.RLock()
 		dir = a.customLogDir
-		a.customLogDirMu.RUnlock()
+		a.sessionLogSettingsMu.RUnlock()
 	}
-	name, protocol := a.panelLogTitle(panelID)
+	name, host, protocol := a.panelLogTitle(panelID)
+	a.sessionLogSettingsMu.RLock()
+	filenameTemplate := a.sessionLogFilename
+	a.sessionLogSettingsMu.RUnlock()
 
 	a.panelLogMu.Lock()
 	logger := a.panelLogs[panelID]
@@ -981,7 +1111,7 @@ func (a *App) EnableSessionOutputLog(panelID, dir string) (string, error) {
 	}
 	a.panelLogMu.Unlock()
 
-	path, err := logger.Enable(dir, name, protocol)
+	path, err := logger.Enable(dir, filenameTemplate, name, host, protocol)
 	if err != nil {
 		return "", err
 	}
@@ -1038,9 +1168,17 @@ func (a *App) GetSessionOutputLogInfo(panelID string) SessionLogInfo {
 // restores the OS default. Existing log files are not migrated; the
 // change only affects logs enabled after this call.
 func (a *App) SetDefaultSessionLogDir(dir string) {
-	a.customLogDirMu.Lock()
+	a.sessionLogSettingsMu.Lock()
 	a.customLogDir = dir
-	a.customLogDirMu.Unlock()
+	a.sessionLogSettingsMu.Unlock()
+}
+
+// setSessionLogFilename installs the template used for newly created logs.
+// Empty selects session.DefaultSessionLogFilenameTemplate.
+func (a *App) setSessionLogFilename(filenameTemplate string) {
+	a.sessionLogSettingsMu.Lock()
+	a.sessionLogFilename = filenameTemplate
+	a.sessionLogSettingsMu.Unlock()
 }
 
 // GetDefaultSessionLogDir returns the directory a fresh session log
@@ -1048,9 +1186,9 @@ func (a *App) SetDefaultSessionLogDir(dir string) {
 // (~/Documents/uniTerm/logs on all platforms). Used by the settings UI
 // to show the current default path as a placeholder.
 func (a *App) GetDefaultSessionLogDir() string {
-	a.customLogDirMu.RLock()
+	a.sessionLogSettingsMu.RLock()
 	custom := a.customLogDir
-	a.customLogDirMu.RUnlock()
+	a.sessionLogSettingsMu.RUnlock()
 	if custom != "" {
 		return custom
 	}

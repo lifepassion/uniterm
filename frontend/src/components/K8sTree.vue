@@ -8,9 +8,9 @@
           @click="toggle(group.key)"
         >
           <span class="db-arrow">
-            <component :is="expanded.has(group.key) ? ChevronDown : ChevronRight" :size="12" />
+            <component :is="expanded.has(group.key) ? ChevronDown : ChevronRight" :size="'0.75rem'" />
           </span>
-          <component :is="groupIcon(group.key)" class="db-icon" :size="14" />
+          <component :is="groupIcon(group.key)" class="db-icon" :size="'0.875rem'" />
           <span class="db-name">{{ group.label }}</span>
         </div>
         <template v-if="expanded.has(group.key)">
@@ -22,7 +22,7 @@
             @click="$emit('update:modelValue', r.key)"
           >
             <span class="table-icon-spacer" />
-            <component :is="iconOf(r.icon)" class="table-icon" :size="14" />
+            <component :is="iconOf(r.icon)" class="table-icon" :size="'0.875rem'" />
             <span class="table-name">{{ r.label }}</span>
           </div>
           <div v-if="group.resources.length === 0" class="empty-hint">
@@ -116,8 +116,8 @@ function groupIcon(_g: ResourceGroup) {
 .db-header {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
+  gap: 0.25rem;
+  padding: 0.375rem 0.5rem;
   cursor: pointer;
   user-select: none;
   transition: background 0.12s ease;
@@ -129,7 +129,7 @@ function groupIcon(_g: ResourceGroup) {
   background: var(--bg-hover);
 }
 .db-arrow {
-  width: 12px;
+  width: 0.75rem;
   flex-shrink: 0;
   color: var(--text-muted);
   display: flex;
@@ -145,7 +145,7 @@ function groupIcon(_g: ResourceGroup) {
 }
 .db-name {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -155,8 +155,8 @@ function groupIcon(_g: ResourceGroup) {
 .table-item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
+  gap: 0.25rem;
+  padding: 0.375rem 0.5rem;
   cursor: pointer;
   user-select: none;
   transition: background 0.12s ease;
@@ -168,7 +168,7 @@ function groupIcon(_g: ResourceGroup) {
   background: var(--bg-hover);
 }
 .table-icon-spacer {
-  width: 30px;
+  width: 1.875rem;
   flex-shrink: 0;
 }
 .table-icon {
@@ -177,16 +177,16 @@ function groupIcon(_g: ResourceGroup) {
 }
 .table-name {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .empty-hint {
-  padding: 4px 8px 4px 28px;
+  padding: 0.25rem 0.5rem 0.25rem 1.75rem;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 </style>

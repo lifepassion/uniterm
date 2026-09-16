@@ -5,10 +5,61 @@
     :title="editorTitle"
     width="80%"
     :close-on-click-modal="false"
+    :close-on-press-escape="false"
     destroy-on-close
     @update:model-value="(v: boolean) => emit('update:visible', v)"
     @closed="onClosed"
   >
+    <div class="editor-toolbar">
+      <!-- Clipboard ops: cut/copy/paste through the editor (Wails clipboard). -->
+      <button class="toolbar-icon-btn" :title="t('sftp.cut')" @click="editorRef?.cut()">
+        <el-icon><Scissors :size="'0.875rem'" /></el-icon>
+      </button>
+      <button class="toolbar-icon-btn" :title="t('sftp.copy')" @click="editorRef?.copy()">
+        <el-icon><Copy :size="'0.875rem'" /></el-icon>
+      </button>
+      <button class="toolbar-icon-btn" :title="t('sftp.paste')" @click="editorRef?.paste()">
+        <el-icon><ClipboardPaste :size="'0.875rem'" /></el-icon>
+      </button>
+      <span class="toolbar-divider" />
+      <!-- Edit ops: undo/redo wired to CodeMirror history. -->
+      <button class="toolbar-icon-btn" @click="editorRef?.undo()" :title="t('sftp.edit.undo')">
+        <el-icon><Undo2 :size="'0.875rem'" /></el-icon>
+      </button>
+      <button class="toolbar-icon-btn" @click="editorRef?.redo()" :title="t('sftp.edit.redo')">
+        <el-icon><Redo2 :size="'0.875rem'" /></el-icon>
+      </button>
+      <span class="toolbar-divider" />
+      <!-- View: font size. -->
+      <button class="toolbar-icon-btn" @click="fontSizeDown" :title="t('sftp.edit.fontSize')">
+        <el-icon><ZoomOut :size="'0.875rem'" /></el-icon>
+      </button>
+      <span class="font-size-label">{{ fontSize }}px</span>
+      <button class="toolbar-icon-btn" @click="fontSizeUp" :title="t('sftp.edit.fontSize')">
+        <el-icon><ZoomIn :size="'0.875rem'" /></el-icon>
+      </button>
+      <span class="toolbar-divider" />
+      <!-- Search toggle (the editor owns the search bar; Ctrl+F also opens it). -->
+      <button
+        class="toolbar-icon-btn"
+        :class="{ active: searchOpen }"
+        :title="t('sftp.edit.search')"
+        @click="searchOpen = editorRef?.toggleSearch() ?? false"
+      >
+        <el-icon><Search :size="'0.875rem'" /></el-icon>
+      </button>
+      <!-- View: wrap toggle. Language / encoding / line-ending stay in the
+           footer's options row. -->
+      <button
+        class="toolbar-icon-btn"
+        :class="{ active: editorWrapEnabled && !wrapDisabled }"
+        :disabled="wrapDisabled"
+        @click="editorWrapEnabled = !editorWrapEnabled"
+        :title="t('sftp.edit.wrap')"
+      >
+        <el-icon><WrapText :size="'0.875rem'" /></el-icon>
+      </button>
+    </div>
     <div class="editor-host">
       <SyntaxEditor
         ref="editorRef"
@@ -16,29 +67,49 @@
         :file-path="editorPath"
         :lang="syntaxLang"
         :wrap="editorWrapEnabled"
+        :font-size="fontSize"
         :compact="true"
+        @search-open="(v: boolean) => (searchOpen = v)"
       />
     </div>
     <template #footer>
       <div class="editor-footer">
         <div class="editor-opts">
-          <el-select v-model="syntaxLang" style="width: 110px" filterable>
+          <el-select v-model="syntaxLang" style="width: 6.875rem" filterable>
             <el-option v-for="l in LANG_OPTIONS" :key="l.value" :label="l.label" :value="l.value" />
           </el-select>
-          <el-select v-model="editorEncoding" style="width: 100px">
-            <el-option label="UTF-8" value="utf-8" />
-            <el-option label="UTF-16 LE" value="utf-16le" />
-            <el-option label="UTF-16 BE" value="utf-16be" />
-            <el-option label="GBK" value="gbk" />
-          </el-select>
-          <el-select v-model="editorLineEnding" style="width: 140px">
+          <button
+            ref="encodingBtn"
+            class="editor-encoding-btn"
+            @click.stop="encodingMenu?.toggle(encodingBtn as HTMLElement)"
+          >
+            {{ encodingLabel(editorEncoding) }}
+            <ChevronDown :size="'0.875rem'" />
+          </button>
+          <Menu ref="encodingMenu" v-model:visible="encodingMenuVisible">
+            <MenuSubmenu :label="t('sftp.edit.reopenWith')">
+              <MenuItem
+                v-for="e in ENCODINGS"
+                :key="e.value"
+                :class="{ active: e.value === editorEncoding }"
+                @click="onReopenWith(e.value)"
+              >{{ e.label }}</MenuItem>
+            </MenuSubmenu>
+            <MenuDivider />
+            <MenuSubmenu :label="t('sftp.edit.saveWith')">
+              <MenuItem
+                v-for="e in ENCODINGS"
+                :key="e.value"
+                :class="{ active: e.value === editorEncoding }"
+                @click="onSaveWith(e.value)"
+              >{{ e.label }}</MenuItem>
+            </MenuSubmenu>
+          </Menu>
+          <el-select v-model="editorLineEnding" style="width: 8.75rem">
             <el-option label="LF (Linux/macOS)" value="lf" />
             <el-option label="CRLF (Windows)" value="crlf" />
             <el-option label="CR (old Mac)" value="cr" />
           </el-select>
-          <el-checkbox v-model="editorWrapEnabled" :disabled="wrapDisabled">
-            {{ t('sftp.edit.wrap') }}
-          </el-checkbox>
         </div>
         <div class="editor-buttons">
           <el-button size="small" @click="onExternal">{{ t('sftp.editExternal') }}</el-button>
@@ -53,14 +124,21 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, nextTick } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 import { msg } from '../services/message'
 import { useLocalStateStore } from '../stores/localStateStore'
+import { utf8ToBase64 } from '../utils/base64'
 import {
   SftpGetContent, SftpLocalGetContent, SftpPutContent, SftpLocalPutContent,
   SftpOpenExternalEditor, OpenExternalEditorLocal,
 } from '../../bindings/github.com/ys-ll/uniterm/app'
 import SyntaxEditor from './SyntaxEditor.vue'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
+import MenuSubmenu from './MenuSubmenu.vue'
+import MenuDivider from './MenuDivider.vue'
+import { Undo2, Redo2, ZoomOut, ZoomIn, WrapText, Search, Scissors, Copy, ClipboardPaste, ChevronDown } from '@lucide/vue'
 
 const { t } = useI18n()
 const localStateStore = useLocalStateStore()
@@ -76,17 +154,32 @@ const emit = defineEmits<{
   (e: 'saved'): void
 }>()
 
-const editorRef = ref<{ focus: () => void } | null>(null)
+const editorRef = ref<{ focus: () => void; undo: () => void; redo: () => void; toggleSearch: () => boolean; cut: () => Promise<boolean>; copy: () => Promise<boolean>; paste: () => Promise<boolean> } | null>(null)
+// Mirrors the editor's search-bar visibility (kept in sync via the
+// search-open event, so Ctrl+F inside the editor updates the button too).
+const searchOpen = ref(false)
 const editorTitle = ref('')
 const editorPath = ref('')
 const editorContent = ref('')
 const editorRawBytes = ref<Uint8Array | null>(null)
 const editorEncoding = ref<Encoding>('utf-8')
 const editorLineEnding = ref<LineEnding>('lf')
+// Encoding menu (button trigger in the footer + two-level action menu).
+const encodingMenu = ref<InstanceType<typeof Menu> | null>(null)
+const encodingBtn = ref<HTMLElement | null>(null)
+const encodingMenuVisible = ref(false)
 const editorWrapEnabled = ref(true)
 const saving = ref(false)
 
 const wrapDisabled = computed(() => /\.(?:pem|key|crt|p7b)$/i.test(editorPath.value))
+
+// Editor font size, 10–24px. Session-scoped: applies via the host element's
+// font-size (SyntaxEditor inherits it), so changes never rebuild the editor.
+const fontSize = ref(13)
+const FONT_MIN = 10
+const FONT_MAX = 24
+function fontSizeDown() { fontSize.value = Math.max(FONT_MIN, fontSize.value - 1) }
+function fontSizeUp() { fontSize.value = Math.min(FONT_MAX, fontSize.value + 1) }
 
 // Syntax-highlighting language override. Defaults to the language the current
 // file's extension maps to (Plain Text when nothing matches), and the rest are
@@ -149,15 +242,21 @@ const LANG_OPTIONS = [
 type Encoding = 'utf-8' | 'utf-16le' | 'utf-16be' | 'gbk'
 type LineEnding = 'lf' | 'crlf' | 'cr'
 
+const ENCODINGS: { value: Encoding, label: string }[] = [
+  { value: 'utf-8', label: 'UTF-8' },
+  { value: 'utf-16le', label: 'UTF-16 LE' },
+  { value: 'utf-16be', label: 'UTF-16 BE' },
+  { value: 'gbk', label: 'GBK' },
+]
+function encodingLabel(enc: Encoding): string {
+  return ENCODINGS.find(e => e.value === enc)?.label || enc
+}
+
 function fromBase64(b64: string): Uint8Array {
   const binary = atob(b64)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
   return bytes
-}
-
-function toBase64(str: string): string {
-  return btoa(str)
 }
 
 function detectEncoding(bytes: Uint8Array): { encoding: Encoding, hasBom: boolean } {
@@ -208,7 +307,7 @@ function encodeContent(text: string, enc: Encoding, lineEnding: LineEnding): str
 
   if (enc === 'utf-8' || enc === 'gbk') {
     // Always encode as UTF-8; the backend re-encodes to GBK when needed.
-    return toBase64(normalized)
+    return utf8ToBase64(normalized)
   }
   const buf = new Uint8Array(normalized.length * 2 + 2)
   let pos = 0
@@ -248,6 +347,7 @@ async function open(path: string, title: string, mode?: 'remote' | 'local') {
   editorTitle.value = title
   editorContent.value = ''
   editorRawBytes.value = null
+  lastDecoded.value = ''
   syntaxLang.value = langFromPath(path)
   editorVisibleInternal = true
   emit('update:visible', true)
@@ -269,6 +369,7 @@ async function open(path: string, title: string, mode?: 'remote' | 'local') {
     const text = decodeContent(bytes, detected.encoding)
     editorLineEnding.value = detectLineEnding(text)
     editorContent.value = text
+    lastDecoded.value = text
     await nextTick()
     editorRef.value?.focus()
   } catch (e: any) {
@@ -281,11 +382,36 @@ let editorVisibleInternal = false
 
 watch(() => props.visible, (v) => { editorVisibleInternal = v })
 
-watch(editorEncoding, (newEnc) => {
-  if (editorVisibleInternal && editorRawBytes.value) {
-    editorContent.value = decodeContent(editorRawBytes.value, newEnc)
+// Text the buffer currently mirrors (set on open and on reopen). Content
+// differing from it means unsaved user edits; the encoding menu's reopen path
+// discards them (with confirmation), the save-with path never touches content.
+const lastDecoded = ref('')
+
+// Re-decode the on-disk bytes with the chosen encoding (fix wrong detection /
+// mojibake). Discards unsaved edits, so confirm first when the buffer is dirty.
+async function onReopenWith(enc: Encoding) {
+  encodingMenuVisible.value = false
+  const bytes = editorRawBytes.value
+  if (!bytes) return
+  if (editorContent.value !== lastDecoded.value) {
+    try {
+      await ElMessageBox.confirm(t('sftp.edit.reopenConfirm'), t('sftp.edit.reopenWith'))
+    } catch {
+      return // cancelled
+    }
   }
-})
+  const text = decodeContent(bytes, enc)
+  editorEncoding.value = enc
+  editorLineEnding.value = detectLineEnding(text)
+  editorContent.value = text
+  lastDecoded.value = text
+}
+
+// Change only the encoding the file will be saved with; the buffer stays as-is.
+function onSaveWith(enc: Encoding) {
+  encodingMenuVisible.value = false
+  editorEncoding.value = enc
+}
 
 // Switch to the configured external editor: close this dialog and open the same
 // file there (remote → download/auto-upload flow, local → open in place).
@@ -340,6 +466,7 @@ function onClosed() {
   editorPath.value = ''
   editorContent.value = ''
   editorRawBytes.value = null
+  lastDecoded.value = ''
   editorVisibleInternal = false
 }
 
@@ -347,10 +474,62 @@ defineExpose({ open })
 </script>
 
 <style scoped>
+/* Slim toolbar above the editor, same icon-button style as the SFTP
+   flat toolbar (FileList.vue .filter-icon-btn): transparent, muted,
+   hover-bright, with hairline dividers between groups. */
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0 0.625rem 0.375rem;
+}
+.toolbar-divider {
+  width: 1px;
+  height: 1rem;
+  margin: 0 0.1875rem;
+  flex-shrink: 0;
+  background: var(--border-subtle);
+}
+.toolbar-icon-btn {
+  width: 1.625rem;
+  height: 1.625rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.12s ease;
+}
+.toolbar-icon-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.toolbar-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  background: transparent;
+  color: var(--text-muted);
+}
+.toolbar-icon-btn.active {
+  color: var(--accent);
+  background: var(--accent-subtle);
+}
+.font-size-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  min-width: 2.25rem;
+  text-align: center;
+  flex-shrink: 0;
+}
 .editor-host {
   height: 60vh;
   border: 1px solid var(--border-subtle);
-  border-radius: 4px;
+  border-radius: 0.25rem;
   overflow: hidden;
   background: #282c34;
 }
@@ -358,22 +537,41 @@ defineExpose({ open })
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 0.75rem;
   width: 100%;
 }
 .editor-buttons {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
-/* el-button adds a default 12px left margin between siblings; drop it so the
-   buttons sit at the flex gap instead of 8px+12px. */
+/* el-button adds a default 0.75rem left margin between siblings; drop it so the
+   buttons sit at the flex gap instead of 0.5rem+0.75rem. */
 .editor-buttons .el-button + .el-button {
   margin-left: 0;
 }
 .editor-opts {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0.75rem;
+}
+/* Encoding menu trigger, styled to sit next to the el-selects like a select. */
+.editor-encoding-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 2rem;
+  padding: 0 0.625rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.editor-encoding-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
 }
 </style>

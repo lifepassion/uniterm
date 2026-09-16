@@ -1,37 +1,45 @@
 import type { ConnectionConfig } from '../types/session'
+import { useIdentityStore } from '../stores/identityStore'
+import {
+  CATEGORY_META, CATEGORY_ORDER, CONNECTION_TYPES, connectionTypeFormLabel, typeFilterKey,
+  defaultPortFor, isSqlDbType,
+} from './connectionTypes'
+
+export { isSqlDbType }
 
 // Platform detection for Windows-only features (e.g., WSLC)
 export const isWindows = /windows/i.test(navigator.userAgent)
 
-const QUICK_PROTOCOLS: Record<string, { type: string; dbType?: string; defaultPort?: number }> = {
-  ssh: { type: 'ssh', defaultPort: 22 },
-  telnet: { type: 'telnet', defaultPort: 23 },
-  mosh: { type: 'mosh', defaultPort: 22 },
-  rdp: { type: 'rdp', defaultPort: 3389 },
-  vnc: { type: 'vnc', defaultPort: 5900 },
-  spice: { type: 'spice' },
-  ftp: { type: 'ftp', defaultPort: 21 },
-  sftp: { type: 'sftp', defaultPort: 22 },
-  scp: { type: 'scp', defaultPort: 22 },
-  smb: { type: 'smb', defaultPort: 445 },
-  s3: { type: 's3' },
-  webdav: { type: 'webdav' },
-  http: { type: 'webdav' },
-  https: { type: 'webdav' },
-  mysql: { type: 'database', dbType: 'mysql', defaultPort: 3306 },
-  postgres: { type: 'database', dbType: 'postgres', defaultPort: 5432 },
-  postgresql: { type: 'database', dbType: 'postgres', defaultPort: 5432 },
-  redis: { type: 'database', dbType: 'redis', defaultPort: 6379 },
-  mongodb: { type: 'database', dbType: 'mongodb', defaultPort: 27017 },
-  mongo: { type: 'database', dbType: 'mongodb', defaultPort: 27017 },
-  es: { type: 'database', dbType: 'elasticsearch', defaultPort: 9200 },
-  elasticsearch: { type: 'database', dbType: 'elasticsearch', defaultPort: 9200 },
-  opensearch: { type: 'database', dbType: 'elasticsearch', defaultPort: 9200 },
-  oracle: { type: 'database', dbType: 'oracle', defaultPort: 1521 },
-  sqlserver: { type: 'database', dbType: 'sqlserver', defaultPort: 1433 },
-  rqlite: { type: 'database', dbType: 'rqlite', defaultPort: 4001 },
-  tcp: { type: 'tcp', defaultPort: 23 },
+// Quick-connect protocol prefixes derived from the connectionTypes registry:
+// every non-hostless type is addressable by its own name (ssh, rdp, redis,
+// …), SQL engines by their dbType (mysql, oracle, …) under the shared
+// 'database' type. Only genuine aliases are listed here; default ports come
+// from the registry. Host-less kinds (local/wsl/serial), UI-only kinds and
+// the container family are not addressable this way.
+const QUICK_PROTOCOL_ALIASES: Record<string, string> = {
+  http: 'webdav',
+  https: 'webdav',
+  postgresql: 'postgres',
+  mongo: 'mongodb',
+  es: 'elasticsearch',
+  opensearch: 'elasticsearch',
 }
+const HOSTLESS_QUICK_TYPES = new Set(['local', 'wsl', 'serial'])
+
+function buildQuickProtocols(): Record<string, { type: string; dbType?: string }> {
+  const map: Record<string, { type: string; dbType?: string }> = {}
+  for (const info of CONNECTION_TYPES) {
+    if (info.formHidden || info.category === 'container' || HOSTLESS_QUICK_TYPES.has(info.type)) continue
+    if (info.dbType) map[info.dbType] = { type: info.type, dbType: info.dbType }
+    else map[info.type] = { type: info.type }
+  }
+  for (const [alias, target] of Object.entries(QUICK_PROTOCOL_ALIASES)) {
+    map[alias] = map[target]
+  }
+  return map
+}
+
+const QUICK_PROTOCOLS = buildQuickProtocols()
 
 // Helper: parse [user[:password]@]host[:port]
 function parseHost(s: string) {
@@ -72,7 +80,7 @@ export function parseQuickConnect(raw: string): Partial<ConnectionConfig> | null
     if (cfg.dbType) result.dbType = cfg.dbType
     if (h.user) result.user = h.user
     if (h.password) result.password = h.password
-    result.port = h.port || cfg.defaultPort
+    result.port = h.port || defaultPortFor(cfg.type, cfg.dbType)
     return result
   }
 
@@ -85,9 +93,9 @@ export function parseQuickConnect(raw: string): Partial<ConnectionConfig> | null
   return result
 }
 
-// Look up default port from QUICK_PROTOCOLS by type or dbType
+// Default port lookup delegated to the connectionTypes registry
 function getDefaultPort(type: string, dbType?: string): number | undefined {
-  return QUICK_PROTOCOLS[type]?.defaultPort ?? (dbType ? QUICK_PROTOCOLS[dbType]?.defaultPort : undefined)
+  return defaultPortFor(type, dbType)
 }
 
 export function formatConnSubtitle(config: ConnectionConfig, getShellLabel?: (path: string) => string): string {
@@ -103,32 +111,36 @@ export function formatConnSubtitle(config: ConnectionConfig, getShellLabel?: (pa
     const defaultPort = getDefaultPort(config.type, config.dbType)
     const showPort = defaultPort !== config.port && defaultPort !== undefined
     const portStr = showPort ? `:${config.port}` : ''
-    detail = config.user ? `${config.user}@${config.host}${portStr}` : `${config.host}${portStr}`
+    // Identity connections keep config.user empty by design (the username lives
+    // in the referenced identity and is materialized at connect time), so the
+    // display name is resolved from the identity store here.
+    let user = config.user
+    if (!user && config.authType === 'identity' && config.identityId) {
+      user = useIdentityStore().identities.find((i) => i.id === config.identityId)?.username || ''
+    }
+    detail = user ? `${user}@${config.host}${portStr}` : `${config.host}${portStr}`
   }
   return `${typeLabel} ${detail}`
+}
+
+// Does a connection match a type-filter key (`all` / `database:<dbType>` /
+// `container:<runtime>` / plain type)? Shared by the sidebar and the start
+// page, which apply the same filter semantics to their lists.
+export function matchTypeFilter(conn: ConnectionConfig, filter: string): boolean {
+  if (filter === 'all') return true
+  if (filter.startsWith('database:')) {
+    return conn.type === 'database' && conn.dbType === filter.slice('database:'.length)
+  }
+  if (filter.startsWith('container:')) {
+    return conn.type === 'container' && (conn.containerRuntime || 'docker') === filter.slice('container:'.length)
+  }
+  return conn.type === filter
 }
 
 // Origin (base) connection type for a filter key, ignoring any `:` suffix
 // (e.g. `database:mysql` → `database`, `container:docker` → `container`).
 export function getTypeBaseType(key: string): string {
   return key.split(':')[0]
-}
-
-// Map of base type → top-level filter category, mirroring the two-level type
-// layout of the new-connection form (ConnectionForm `categories`).
-export const TYPE_CATEGORY: Record<string, string> = {
-  ssh: 'terminal', telnet: 'terminal', mosh: 'terminal', local: 'terminal', serial: 'terminal', tcp: 'terminal', monitor: 'terminal',
-  sftp: 'filetransfer', scp: 'filetransfer', ftp: 'filetransfer', smb: 'filetransfer', s3: 'filetransfer', webdav: 'filetransfer',
-  rdp: 'remote', vnc: 'remote', spice: 'remote', 'x11-desktop': 'remote',
-  database: 'database',
-  k8s: 'container', container: 'container',
-}
-
-// SQL-family database types placed under the "SQL数据库" category; everything
-// else with type 'database' (Redis/MongoDB/Elasticsearch) sits under NoSQL.
-export const SQL_DB_TYPES = ['mysql', 'postgres', 'oracle', 'sqlserver', 'rqlite']
-export function isSqlDbType(dbType?: string): boolean {
-  return !!dbType && SQL_DB_TYPES.includes(dbType)
 }
 
 // Grouping key used by the type filter for a connection, the same shape as a
@@ -159,83 +171,23 @@ export function getTypeCategory(key: string): string {
   if (base === 'database') {
     return isSqlDbType(key.slice('database:'.length)) ? 'sql' : 'nosql'
   }
-  return TYPE_CATEGORY[base] || 'other'
+  return CONNECTION_TYPES.find(t => t.type === base)?.category || 'other'
+}
+
+// Two-level type catalog for the type filter, derived from the connectionTypes
+// registry (same category order and subtype order as the new-connection form —
+// both come from the registry). `t` is required for the localized category
+// titles and type names; `isWin` controls whether Windows-only options (WSL,
+// WSLC) are included.
+export function getTypeFilterCatalog(t: (key: string) => string, isWin = false) {
+  return CATEGORY_ORDER.map(key => ({
+    key,
+    label: t(CATEGORY_META[key].labelKey),
+    items: CONNECTION_TYPES
+      .filter(info => info.category === key && !info.formHidden && (info.windowsOnly ? isWin : true))
+      .map(info => ({ key: typeFilterKey(info), label: connectionTypeFormLabel(info, t) })),
+  }))
 }
 
 // Ordered, labelled category keys for the two-level filter menu.
-export const TYPE_CATEGORIES: string[] = ['terminal', 'filetransfer', 'remote', 'sql', 'nosql', 'container', 'other']
-
-// Two-level type catalog for the type filter, matching the new-connection form
-// (ConnectionForm `categories` + `allSubTypes`) exactly — same category order,
-// same subtype order, same labels. `t` is required only for the few names that
-// are localized (category titles, local terminal, serial).
-// `isWin` controls whether Windows-only options (WSLC) are included.
-export function getTypeFilterCatalog(t: (key: string) => string, isWin = false) {
-  return [
-    {
-      key: 'terminal',
-      label: t('conn.categoryTerminal'),
-      items: [
-        { key: 'ssh', label: 'SSH' },
-        { key: 'telnet', label: 'Telnet' },
-        { key: 'mosh', label: 'Mosh' },
-        { key: 'local', label: t('conn.localTerminal') },
-        { key: 'serial', label: t('serial.title') },
-        { key: 'tcp', label: 'TCP' },
-      ],
-    },
-    {
-      key: 'filetransfer',
-      label: t('conn.categoryFileTransfer'),
-      items: [
-        { key: 'sftp', label: 'SFTP' },
-        { key: 'scp', label: 'SCP' },
-        { key: 'ftp', label: 'FTP' },
-        { key: 'smb', label: 'SMB' },
-        { key: 's3', label: 'S3' },
-        { key: 'webdav', label: 'WebDAV' },
-      ],
-    },
-    {
-      key: 'remote',
-      label: t('conn.categoryRemote'),
-      items: [
-        { key: 'rdp', label: 'RDP' },
-        { key: 'vnc', label: 'VNC' },
-        { key: 'spice', label: 'SPICE' },
-        { key: 'x11-desktop', label: 'X11 Desktop' },
-      ],
-    },
-    {
-      key: 'sql',
-      label: t('db.categorySQL'),
-      items: [
-        { key: 'database:mysql', label: 'MySQL' },
-        { key: 'database:postgres', label: 'PostgreSQL' },
-        { key: 'database:oracle', label: 'Oracle' },
-        { key: 'database:sqlserver', label: 'SQL Server' },
-        { key: 'database:rqlite', label: 'rqlite' },
-      ],
-    },
-    {
-      key: 'nosql',
-      label: t('db.categoryNoSQL'),
-      items: [
-        { key: 'database:redis', label: 'Redis' },
-        { key: 'database:mongodb', label: 'MongoDB' },
-        { key: 'database:elasticsearch', label: 'Elasticsearch' },
-      ],
-    },
-    {
-      key: 'container',
-      label: t('conn.categoryContainer'),
-      items: [
-        { key: 'k8s', label: 'Kubernetes' },
-        { key: 'container:docker', label: 'Docker' },
-        { key: 'container:podman', label: 'Podman' },
-        { key: 'container:nerdctl', label: 'nerdctl' },
-        ...(isWin ? [{ key: 'container:wslc', label: 'WSLC' }] : []),
-      ],
-    },
-  ]
-}
+export const TYPE_CATEGORIES: string[] = [...CATEGORY_ORDER, 'other']

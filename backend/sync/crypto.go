@@ -52,8 +52,8 @@ func EncryptConfigFiles(srcDir, destDir string, key []byte, kc *Keychain, ps Pas
 		switch name {
 		case "connections.json":
 			err = encryptConnectionsFile(src, dest, key, kc, ps)
-		case "settings.json":
-			err = encryptSettingsFile(src, dest, key, kc, ps)
+		case "ai.json":
+			err = encryptAIConfigFile(src, dest, key, kc, ps)
 		case "identities.json":
 			err = encryptIdentitiesFile(src, dest, key, ps)
 		case "proxies.json":
@@ -120,7 +120,11 @@ func encryptConnectionsFile(src, dest string, key []byte, kc *Keychain, ps Passw
 	return os.WriteFile(dest, []byte(encoded), 0600)
 }
 
-func encryptSettingsFile(src, dest string, key []byte, kc *Keychain, ps PasswordStore) error {
+// encryptAIConfigFile normalizes model apiKeys before encrypting ai.json:
+// keychain-backed keys (empty apiKey field) are pulled in via kc and
+// enc:v1:-prefixed keys are normalized to plaintext through ps, so only
+// the sync key protects the file at rest in the repo.
+func encryptAIConfigFile(src, dest string, key []byte, kc *Keychain, ps PasswordStore) error {
 	data, err := readJSONFile(src)
 	if err != nil {
 		return err
@@ -129,22 +133,20 @@ func encryptSettingsFile(src, dest string, key []byte, kc *Keychain, ps Password
 	if kc != nil || ps != nil {
 		var obj map[string]interface{}
 		if err := json.Unmarshal(data, &obj); err == nil {
-			if ai, ok := obj["ai"].(map[string]interface{}); ok {
-				if models, ok := ai["models"].([]interface{}); ok {
-					for _, m := range models {
-						if mm, ok := m.(map[string]interface{}); ok {
-							ak, _ := mm["apiKey"].(string)
-							if ak == "" {
-								// Legacy: apiKey stored in keychain, not in JSON.
-								if id, ok := mm["id"].(string); ok && kc != nil {
-									if kcAk, err := kc.GetModelAPIKey(id); err == nil && kcAk != "" {
-										mm["apiKey"] = kcAk
-									}
+			if models, ok := obj["models"].([]interface{}); ok {
+				for _, m := range models {
+					if mm, ok := m.(map[string]interface{}); ok {
+						ak, _ := mm["apiKey"].(string)
+						if ak == "" {
+							// Legacy: apiKey stored in keychain, not in JSON.
+							if id, ok := mm["id"].(string); ok && kc != nil {
+								if kcAk, err := kc.GetModelAPIKey(id); err == nil && kcAk != "" {
+									mm["apiKey"] = kcAk
 								}
-							} else if isEncryptedField(ak) && ps != nil {
-								if pt, err := ps.Decrypt(ak); err == nil {
-									mm["apiKey"] = pt
-								}
+							}
+						} else if isEncryptedField(ak) && ps != nil {
+							if pt, err := ps.Decrypt(ak); err == nil {
+								mm["apiKey"] = pt
 							}
 						}
 					}
@@ -246,8 +248,8 @@ func DecryptConfigFiles(srcDir, destDir string, key []byte, ps PasswordStore) er
 		switch name {
 		case "connections.json":
 			err = decryptConnectionsFile(src, dest, key, ps)
-		case "settings.json":
-			err = decryptSettingsFile(src, dest, key, ps)
+		case "ai.json":
+			err = decryptAIConfigFile(src, dest, key, ps)
 		case "identities.json":
 			err = decryptIdentitiesFile(src, dest, key, ps)
 		case "proxies.json":
@@ -311,7 +313,7 @@ func decryptConnectionsFile(src, dest string, key []byte, ps PasswordStore) erro
 	return os.WriteFile(dest, plaintext, 0600)
 }
 
-func decryptSettingsFile(src, dest string, key []byte, ps PasswordStore) error {
+func decryptAIConfigFile(src, dest string, key []byte, ps PasswordStore) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -322,21 +324,19 @@ func decryptSettingsFile(src, dest string, key []byte, ps PasswordStore) error {
 
 	plaintext, err := decryptBytes(string(data), key)
 	if err != nil {
-		return fmt.Errorf("decrypt settings: %w", err)
+		return fmt.Errorf("decrypt ai config: %w", err)
 	}
 
 	if ps != nil {
 		var obj map[string]interface{}
 		if err := json.Unmarshal(plaintext, &obj); err == nil {
-			if ai, ok := obj["ai"].(map[string]interface{}); ok {
-				if models, ok := ai["models"].([]interface{}); ok {
-					for _, m := range models {
-						if mm, ok := m.(map[string]interface{}); ok {
-							if ak, ok := mm["apiKey"].(string); ok && ak != "" && !isEncryptedField(ak) {
-								// Re-encrypt plaintext under the local credential key.
-								if enc, err := ps.Encrypt(ak); err == nil {
-									mm["apiKey"] = enc
-								}
+			if models, ok := obj["models"].([]interface{}); ok {
+				for _, m := range models {
+					if mm, ok := m.(map[string]interface{}); ok {
+						if ak, ok := mm["apiKey"].(string); ok && ak != "" && !isEncryptedField(ak) {
+							// Re-encrypt plaintext under the local credential key.
+							if enc, err := ps.Encrypt(ak); err == nil {
+								mm["apiKey"] = enc
 							}
 						}
 					}

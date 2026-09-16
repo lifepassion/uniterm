@@ -31,7 +31,7 @@ export async function restartWorkload(connId: string, kind: string, ns: string, 
   ensureOk(status, raw)
 }
 
-export async function scaleWorkload(connId: string, apiBase: string, ns: string, name: string, replicas: number): Promise<void> {
+export async function scaleWorkload(connId: string, apiBase: string, _ns: string, name: string, replicas: number): Promise<void> {
   const path = `${apiBase}/${encodeURIComponent(name)}/scale`
   const body = JSON.stringify({ spec: { replicas } })
   const { status, raw } = await requestJSON(connId, 'PATCH', path, body, 'application/merge-patch+json')

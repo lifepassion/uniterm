@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -24,7 +25,7 @@ type SyncService struct {
 	// independent of the migratable data directory.
 	configDir string
 	// dataDir is the resolved config data directory whose config files
-	// (connections.json, settings.json, …) are encrypted to / decrypted
+	// (connections.json, ai.json, …) are encrypted to / decrypted
 	// from the sync repo.
 	dataDir     string
 	repoPath    string
@@ -739,27 +740,18 @@ func getConfigModTime(dir string) time.Time {
 // / quick-commands but no connections is not treated as "empty" and silently
 // overwritten on first sync (SYNC-P0-1). Uses syncedFiles rather than every
 // persisted JSON: ai-sessions.json / skills.json are local-only and never
-// synced, so their presence must not block a first-sync pull (their files
-// are not touched by decrypt either).
+// synced, so their presence must not block a first-sync add-and-pull
+// (their files are not touched by decrypt either). favorites.json is an
+// array file: only a non-empty array counts as data.
 func isConfigDirEmpty(dir string) bool {
 	for _, name := range syncedFiles {
-		path := filepath.Join(dir, name)
-		data, err := os.ReadFile(path)
+		v, err := readJSONValue(filepath.Join(dir, name))
 		if err != nil {
-			continue
-		}
-		if len(data) == 0 {
-			continue
-		}
-		// Treat as non-empty if the file parses to anything other than
-		// an explicitly empty wrapper.
-		var probe map[string]json.RawMessage
-		if err := json.Unmarshal(data, &probe); err != nil {
-			// Unparseable — still treat as non-empty so the user's data
-			// is never silently nuked.
+			// Unparseable or unreadable — treat as non-empty so the
+			// user's data is never silently nuked.
 			return false
 		}
-		if len(probe) > 0 {
+		if v != nil {
 			return false
 		}
 	}
@@ -784,39 +776,69 @@ func compareConfigDirs(localDir, remoteDir string, kc *Keychain, ps PasswordStor
 	return true, nil
 }
 
+// readJSONValue decodes a config file into a generic JSON value. Most synced
+// files are objects, but favorites.json is a top-level array, so the value
+// must not be assumed to be a map. A missing file and explicitly empty
+// wrappers ({}, [], null) all normalize to nil — they all mean "no data" and
+// must compare equal to each other.
+func readJSONValue(path string) (interface{}, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if len(bytes.TrimSpace(data)) == 0 {
+		return nil, nil
+	}
+	var v interface{}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return nil, err
+	}
+	switch t := v.(type) {
+	case map[string]interface{}:
+		if len(t) == 0 {
+			return nil, nil
+		}
+	case []interface{}:
+		if len(t) == 0 {
+			return nil, nil
+		}
+	}
+	return v, nil
+}
+
 // compareConfigFiles compares two config files after normalizing the local side
 // (backfill legacy keychain passwords, decrypt enc:v1: fields) so both sides
 // are plaintext. JSON is re-marshaled via json.MarshalIndent so Go's
 // encoding/json sorts map keys deterministically before byte comparison —
-// prevents spurious diffs from non-deterministic key ordering.
+// prevents spurious diffs from non-deterministic key ordering. Array files
+// (favorites.json) keep their order, which is meaningful, and carry no
+// encrypted fields, so normalization applies to objects only.
 func compareConfigFiles(localPath, remotePath string, kc *Keychain, ps PasswordStore) (bool, error) {
-	localData, err := os.ReadFile(localPath)
+	localVal, err := readJSONValue(localPath)
 	if err != nil {
-		localData = []byte("{}")
-	}
-	remoteData, err := os.ReadFile(remotePath)
-	if err != nil {
-		remoteData = []byte("{}")
-	}
-
-	var localObj, remoteObj map[string]interface{}
-	if err := json.Unmarshal(localData, &localObj); err != nil {
 		return false, fmt.Errorf("parse local %s: %w", localPath, err)
 	}
-	if err := json.Unmarshal(remoteData, &remoteObj); err != nil {
+	remoteVal, err := readJSONValue(remotePath)
+	if err != nil {
 		return false, fmt.Errorf("parse remote %s: %w", remotePath, err)
 	}
 
-	// Backfill legacy empty passwords from keychain, then decrypt any enc:v1:
-	// fields to plaintext, so the local side is comparable to the remote copy.
-	backfillFromKeychain(localObj, kc)
-	decryptFieldsInPlace(localObj, ps)
+	if obj, ok := localVal.(map[string]interface{}); ok {
+		// Backfill legacy empty passwords from keychain, then decrypt any
+		// enc:v1: fields to plaintext, so the local side is comparable to
+		// the remote copy.
+		backfillFromKeychain(obj, kc)
+		decryptFieldsInPlace(obj, ps)
+	}
 
-	localNorm, err := json.MarshalIndent(localObj, "", "  ")
+	localNorm, err := json.MarshalIndent(localVal, "", "  ")
 	if err != nil {
 		return false, fmt.Errorf("marshal local: %w", err)
 	}
-	remoteNorm, err := json.MarshalIndent(remoteObj, "", "  ")
+	remoteNorm, err := json.MarshalIndent(remoteVal, "", "  ")
 	if err != nil {
 		return false, fmt.Errorf("marshal remote: %w", err)
 	}

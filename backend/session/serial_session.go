@@ -253,6 +253,7 @@ func (s *SerialSession) Write(data []byte) error {
 
 func (s *SerialSession) Disconnect() error {
 	s.quitOnce.Do(func() {
+		s.SetZmodemMode(false)
 		close(s.quit)
 		if s.port != nil {
 			s.port.Close()

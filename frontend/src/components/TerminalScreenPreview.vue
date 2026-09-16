@@ -529,8 +529,8 @@ onBeforeUnmount(unbind)
   border: none;
   border-top: 1px solid var(--el-border-color, rgba(255, 255, 255, 0.2));
   border-bottom: 1px solid var(--el-border-color, rgba(255, 255, 255, 0.2));
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-  padding: 2px 4px;
+  box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.35);
+  padding: 0.125rem 0.25rem;
   box-sizing: content-box;
   /* Frosted glass: translucent background (inline, theme-tinted) + backdrop
      blur so the content beneath the popup shows through, blurred. Keep this
@@ -538,7 +538,7 @@ onBeforeUnmount(unbind)
      -webkit- alias makes the CSS minifier merge the two into the prefixed
      form, which WebView2 (Chromium) does not honor — that silently removed
      the blur in production builds. */
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(0.5rem);
   /* Display-only: never intercepts the mouse, so hovering/clicking near it
      keeps working and the preview keeps refreshing underneath. */
   pointer-events: none;
@@ -555,13 +555,13 @@ onBeforeUnmount(unbind)
 .preview-col-time {
   flex: none;
   text-align: right;
-  padding-right: 2px;
+  padding-right: 0.125rem;
 }
 
 .preview-col-num {
   flex: none;
   text-align: right;
-  padding-right: 8px;
+  padding-right: 0.5rem;
 }
 
 .preview-content {

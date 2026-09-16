@@ -3,9 +3,9 @@
     :model-value="visible"
     @update:model-value="(v: boolean) => !v && onCancel()"
     :title="t('importExport.exportTitle')"
-    width="440px"
+    width="27.5rem"
   >
-    <el-form label-width="100px">
+    <el-form label-width="6.25rem">
       <el-form-item :label="t('importExport.configPassword')">
         <el-input v-model="password" type="password" show-password />
       </el-form-item>
